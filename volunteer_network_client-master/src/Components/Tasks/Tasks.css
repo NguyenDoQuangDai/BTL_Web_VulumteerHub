@@ -1,0 +1,31 @@
+.card {
+    border: none !important;
+    transition: all .2s ease-in-out;
+}
+
+.card:hover {
+    transform: scale(1.04);
+}
+
+.card .card-footer {
+    border: none;
+}
+
+.tasks-area div>a {
+    color: #000;
+}
+
+.tasks-area div>a:hover {
+    text-decoration: none;
+}
+
+/* hide bottom border radius img */
+.task-image img {
+    margin: 0 0 -15px 0;
+}
+
+.taskItem-footer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}

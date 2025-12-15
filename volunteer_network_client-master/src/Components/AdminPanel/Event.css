@@ -1,0 +1,26 @@
+.file-upload input[type='file'] {
+    display: none;
+}
+
+
+/* or line */
+.event-form .horizontal-or {
+    display: flex;
+    flex-direction: row;
+}
+
+.event-form .horizontal-or:before,
+.event-form .horizontal-or:after {
+    content: '';
+    flex: 1 1;
+    border-bottom: 1px solid #aaa;
+    margin: auto;
+}
+
+.event-form .horizontal-or:before {
+    margin-right: 10px;
+}
+
+.event-form .horizontal-or:after {
+    margin-left: 10px;
+}

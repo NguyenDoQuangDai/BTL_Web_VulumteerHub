@@ -1,0 +1,14 @@
+{
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Spring Boot-VolumteerhubApplication<volumteerhub>",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "mainClass": "org.volumteerhub.VolumteerhubApplication",
+            "projectName": "volumteerhub",
+            "args": "",
+            "envFile": "${workspaceFolder}/.env"
+        }
+    ]
+}
