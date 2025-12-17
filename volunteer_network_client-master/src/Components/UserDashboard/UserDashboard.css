@@ -4,3 +4,493 @@
     box-shadow: 0px 10px 40px rgba(0, 0, 0, 0.1);
     border-radius: 18px;
 }
+
+/* Floating modal overlay for Create Event form */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 1050;
+}
+
+.modal-content-wrapper {
+    width: 100%;
+    max-width: 720px;
+}
+
+/* Interest button: pink on hover or active */
+.btn.interest-btn {
+    border: 2px solid #ff4081 !important;
+    color: #ff4081 !important;
+    background: transparent !important;
+    transition: all 0.2s ease-in-out;
+}
+
+.btn.interest-btn:hover,
+.btn.interest-btn.interested {
+    background-color: #ff4081 !important; /* fill pink on hover/active */
+    color: #ffffff !important;
+    border-color: #d81b60 !important; /* darker pink for visible border */
+}
+
+.btn.interest-btn:focus {
+    box-shadow: 0 0 0 0.2rem rgba(255, 64, 129, 0.25);
+    outline: none;
+}
+
+/* Heart icon color tweaks */
+.btn.interest-btn .interest-heart {
+    color: #ff4081;
+}
+.btn.interest-btn:hover .interest-heart,
+.btn.interest-btn.interested .interest-heart {
+    color: #ffffff;
+}
+
+/* Event title color */
+.event-title {
+    color: #0d47a1;
+}
+
+/* Location line styling */
+.location-line {
+    color: #0d47a1;
+}
+.location-icon {
+    color: #0d47a1;
+}
+
+/* Description line styling */
+.desc-line {
+    color: #6a1b9a; /* deep purple */
+}
+.desc-icon {
+    color: #6a1b9a;
+}
+
+/* Start date line styling */
+.start-line {
+    color: #1b5e20; /* dark green */
+}
+.start-icon {
+    color: #1b5e20;
+}
+
+/* End date line styling */
+.end-line {
+    color: #00695c; /* teal */
+}
+.end-icon {
+    color: #00695c;
+}
+
+/* Deadline line styling */
+.deadline-line {
+    color: #e65100; /* deep orange */
+}
+.deadline-icon {
+    color: #e65100;
+}
+
+/* Owner line styling */
+.owner-line {
+    color: #455a64; /* blue-grey */
+}
+.owner-icon {
+    color: #455a64;
+}
+
+/* Form labels alignment and weight */
+.field-label {
+    display: flex;
+    align-items: center;
+    font-weight: 600;
+    gap: 6px;
+}
+
+/* Event card hover to indicate clickable wall */
+.event-card {
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.event-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0px 12px 44px rgba(0, 0, 0, 0.12);
+}
+
+/* Event wall overlay */
+.wall-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    z-index: 1100;
+    backdrop-filter: blur(4px);
+}
+
+.wall-card {
+    background: #f5f7fa;
+    border-radius: 20px;
+    box-shadow: 0 20px 70px rgba(15, 23, 42, 0.15);
+    padding: 20px 24px;
+    width: min(960px, 100%);
+    max-height: 90vh;
+    overflow-y: auto;
+    scrollbar-width: none; /* Firefox */
+}
+
+.wall-card::-webkit-scrollbar {
+    display: none; /* Chrome, Safari */
+}
+
+.wall-header {
+    position: sticky;
+    top: -20px;
+    background: #f5f7fa;
+    padding: 20px 24px 12px 24px;
+    z-index: 2;
+    border-bottom: 2px solid #cbd5e1;
+    margin: 0 -24px;
+    width: calc(100% + 48px);
+}
+
+.wall-close {
+    position: sticky;
+    top: 8px;
+    right: 0;
+    z-index: 3;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    color: #64748b;
+}
+
+.wall-close:hover {
+    background: #e2e8f0;
+    color: #475569;
+}
+
+.wall-composer textarea {
+    border-radius: 14px;
+    border: 2px solid #cbd5e1;
+    background: #ffffff;
+    color: #1e293b;
+}
+
+.wall-composer textarea:focus {
+    border-color: #3b82f6;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.wall-feed {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+}
+
+.wall-post {
+    border: 1px solid #cbd5e1;
+    border-radius: 16px;
+    padding: 16px 18px;
+    background: linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.1), 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+.wall-post:hover {
+    background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%);
+    border-color: #a0aec0;
+    box-shadow: 0 16px 32px rgba(15, 23, 42, 0.15), 0 4px 12px rgba(59, 130, 246, 0.1);
+    transform: translateY(-6px);
+}
+
+.wall-post .font-weight-bold {
+    font-weight: 600;
+    color: #1e293b;
+    padding: 4px 12px;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 16px;
+    background: #f8fafc;
+    display: inline-block;
+}
+
+.wall-actions button {
+    border-radius: 10px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    color: #64748b;
+    transition: all 0.2s ease;
+}
+
+.wall-actions button:hover {
+    background: #f1f5f9;
+    color: #3b82f6;
+    border-color: #cbd5e1;
+}
+
+.wall-comments {
+    background: #ffffff;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    padding: 10px 12px;
+}
+
+.wall-comment {
+    padding: 10px;
+    border-left: 3px solid transparent;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.wall-comment:hover {
+    background: #f8fafc;
+    border-left-color: #3b82f6;
+}
+
+.comment-replies {
+    margin-top: 10px;
+    padding-left: 6px;
+    border-left: 3px solid #e2e8f0;
+}
+
+.wall-comment + .wall-comment {
+    margin-top: 10px;
+}
+
+/* Comment actions */
+.comment-actions .btn-link {
+    color: #64748b;
+    text-decoration: none;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+.input-group.input-group-sm {
+    align-items: stretch;
+}
+
+.comment-actions .btn-link:hover {
+    color: #3b82f6;
+    text-decoration: none;
+}
+
+/* Comment and reply input styling */
+.input-group.input-group-sm .comment-input,
+.input-group.input-group-sm .reply-input,
+.comment-input,
+.reply-input {
+    border-radius: 24px !important;
+    border: 2px solid #e2e8f0 !important;
+    padding: 10px 18px !important;
+    font-size: 0.9rem;
+    background: #ffffff;
+    color: #1e293b;
+    height: 44px !important;
+    line-height: 24px;
+    margin-right: 8px;
+}
+
+.comment-input:focus,
+.reply-input:focus {
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important;
+    outline: none;
+}
+
+.input-group.input-group-sm .comment-submit,
+.input-group.input-group-sm .reply-submit,
+.comment-submit,
+.reply-submit {
+    height: 44px !important;
+    display: flex;
+    align-items: center;
+    border-radius: 24px !important;
+    padding: 10px 24px !important;
+    font-weight: 600;
+    font-size: 0.9rem;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+    border: none !important;
+    color: #ffffff;
+    line-height: 24px;
+}
+
+.comment-submit:hover,
+.reply-submit:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+}
+
+/* Composer username */
+.composer-username {
+    font-weight: 600;
+    color: #3b82f6;
+    font-size: 0.95rem;
+    padding: 6px 14px;
+    border: 2px solid #3b82f6;
+    border-radius: 20px;
+    display: inline-block;
+    background: #eff6ff;
+}
+
+/* Comment header layout */
+.comment-header {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.comment-author {
+    color: #1e293b;
+    white-space: nowrap;
+    font-weight: 600;
+    padding: 4px 12px;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 16px;
+    background: #f8fafc;
+    display: inline-block;
+}
+
+.reply-input-wrapper {
+    background: transparent;
+    padding: 0;
+    border: none;
+}
+
+.reply-input-wrapper .input-group-append {
+    margin-left: 8px;
+}
+
+/* Wall tabs */
+.wall-tabs {
+    display: flex;
+    gap: 10px;
+    border-bottom: 2px solid #cbd5e1;
+    padding: 10px 24px;
+    position: sticky;
+    top: 60px;
+    background: #f5f7fa;
+    z-index: 2;
+    margin: 0 -24px;
+    width: calc(100% + 48px);
+}
+
+.wall-tab {
+    background: transparent;
+    border: none;
+    padding: 10px 18px;
+    font-weight: 500;
+    color: #64748b;
+    cursor: pointer;
+    border-radius: 10px;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.wall-tab:hover {
+    background: #f1f5f9;
+    color: #3b82f6;
+}
+
+.wall-tab.active {
+    color: #3b82f6;
+    background: #eff6ff;
+    font-weight: 600;
+}
+
+.wall-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -12px;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+    border-radius: 2px;
+}
+
+/* Register button with similar logic: outline by default, fill on hover */
+.btn.register-btn {
+    border: 2px solid #28a745 !important;
+    color: #28a745 !important;
+    background: transparent !important;
+    transition: all 0.2s ease-in-out;
+}
+
+.btn.register-btn:hover,
+.btn.register-btn:active {
+    background-color: #28a745 !important;
+    color: #ffffff !important;
+    border-color: #1e7e34 !important;
+}
+
+.btn.register-btn:focus {
+    box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+    outline: none;
+}
+
+/* Cancel (Hủy đăng ký) button: red fill */
+.btn.cancel-btn {
+    border: 2px solid #dc3545 !important;
+    color: #ffffff !important;
+    background-color: #dc3545 !important;
+    transition: all 0.2s ease-in-out;
+}
+
+.btn.cancel-btn:hover,
+.btn.cancel-btn:active {
+    background-color: #c82333 !important;
+    border-color: #bd2130 !important;
+    color: #ffffff !important;
+}
+
+.btn.cancel-btn.cancelled {
+    background-color: transparent !important;
+    color: #dc3545 !important;
+    border-color: #dc3545 !important;
+}
+
+.btn.cancel-btn:focus {
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+    outline: none;
+}
+
+.btn.cancel-btn.disabled-action,
+.btn.cancel-btn:disabled {
+    background-color: #6c757d !important;
+    border-color: #6c757d !important;
+    color: #ffffff !important;
+    cursor: not-allowed;
+    opacity: 0.9;
+}
+
+/* Confirmation overlay for cancel action */
+.confirm-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1060;
+    padding: 16px;
+}
+
+.confirm-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    max-width: 320px;
+    width: 100%;
+}

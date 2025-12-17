@@ -9,12 +9,17 @@ export const authService = {
         body: JSON.stringify({ username, password }),
       });
       
-      if (response.token) {
+      if (response && response.token) {
         localStorage.setItem('token', response.token);
-        localStorage.setItem('user', JSON.stringify(response.user));
+        const userObj = response.user || (response.username ? { username: response.username } : null);
+        if (userObj) {
+          localStorage.setItem('user', JSON.stringify(userObj));
+        } else {
+          localStorage.removeItem('user');
+        }
+        return { ...response, user: userObj };
       }
-      
-      return response;
+      return response || {};
     } catch (error) {
       throw new Error(error.message || 'Login failed');
     }
@@ -27,7 +32,14 @@ export const authService = {
 
   getCurrentUser: () => {
     const userStr = localStorage.getItem('user');
-    return userStr ? JSON.parse(userStr) : null;
+    if (!userStr) return null;
+    try {
+      return JSON.parse(userStr);
+    } catch (e) {
+      // Clean up bad value and return null
+      localStorage.removeItem('user');
+      return null;
+    }
   },
 
   isAuthenticated: () => {

@@ -80,17 +80,15 @@ export const AuthProvider = ({ children }) => {
       try {
         const token = localStorage.getItem('token');
         const user = authService.getCurrentUser();
-        
-        if (token && user) {
+
+        if (token) {
+          // Treat presence of token as authenticated; attach user if available
           dispatch({
             type: AUTH_ACTIONS.LOGIN_SUCCESS,
-            payload: { user },
+            payload: { user: user || null },
           });
         } else {
-          dispatch({
-            type: AUTH_ACTIONS.SET_LOADING,
-            payload: false,
-          });
+          dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: false });
         }
       } catch (error) {
         console.error('Error checking auth status:', error);
@@ -110,10 +108,10 @@ export const AuthProvider = ({ children }) => {
     
     try {
       const response = await authService.login(email, password);
-      
+      const user = response.user || (response.username ? { username: response.username } : null);
       dispatch({
         type: AUTH_ACTIONS.LOGIN_SUCCESS,
-        payload: { user: response.user },
+        payload: { user },
       });
       
       return response;
