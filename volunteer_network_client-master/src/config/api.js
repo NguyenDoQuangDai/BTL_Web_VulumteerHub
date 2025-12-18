@@ -36,6 +36,8 @@ export const API_ENDPOINTS = {
   
   // Admin
   ADMIN: {
+    TEST: `${API_BASE_URL}/admin/test`,
+    DEBUG: `${API_BASE_URL}/admin/debug`,
     APPROVE_EVENT: (id) => `${API_BASE_URL}/admin/events/${id}/approve`,
     REJECT_EVENT: (id) => `${API_BASE_URL}/admin/events/${id}/reject`,
     GET_ALL_EVENTS: `${API_BASE_URL}/admin/events`,
@@ -62,15 +64,20 @@ export const apiRequest = async (url, options = {}) => {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       
-      // Handle specific HTTP status codes
+      // Use backend error message first, fallback to generic messages
+      const errorMessage = errorData.message || errorData.error;
+      
+      // Handle specific HTTP status codes with custom messages if no backend message
       if (response.status === 403) {
-        throw new Error('FORBIDDEN: You do not have permission to access this resource');
+        throw new Error(errorMessage || 'You do not have permission to access this resource');
       }
       if (response.status === 401) {
-        throw new Error('UNAUTHORIZED: Please login to continue');
+        // For login page, show backend message (e.g., "Invalid username or password")
+        // For other pages, show generic unauthorized message
+        throw new Error(errorMessage || 'Please login to continue');
       }
       
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      throw new Error(errorMessage || `HTTP error! status: ${response.status}`);
     }
     
     // Handle no content responses

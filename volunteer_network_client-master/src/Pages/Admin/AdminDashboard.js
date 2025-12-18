@@ -24,7 +24,13 @@ const AdminDashboard = () => {
 
       try {
         // Try to call an admin endpoint to test access
-        await adminService.getAllEvents();
+        console.log('Testing admin access...');
+        const testResult = await adminService.testAccess();
+        console.log('Admin test result:', testResult);
+        
+        const debugResult = await adminService.debugAccess();
+        console.log('Admin debug result:', debugResult);
+        
         setHasAdminAccess(true);
       } catch (error) {
         console.error('Admin access test failed:', error);

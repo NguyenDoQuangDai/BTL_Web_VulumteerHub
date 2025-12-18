@@ -202,6 +202,30 @@ export const adminService = {
     }
   },
 
+  // Test admin access
+  testAccess: async () => {
+    try {
+      return await apiRequest(API_ENDPOINTS.ADMIN.TEST);
+    } catch (error) {
+      if (error.message.includes('FORBIDDEN')) {
+        throw new Error('Access denied. Admin privileges required.');
+      }
+      throw error;
+    }
+  },
+
+  // Debug admin access
+  debugAccess: async () => {
+    try {
+      return await apiRequest(API_ENDPOINTS.ADMIN.DEBUG);
+    } catch (error) {
+      if (error.message.includes('FORBIDDEN')) {
+        throw new Error('Access denied. Admin privileges required.');
+      }
+      throw error;
+    }
+  },
+
   // Get all events (for admin dashboard)
   getAllEvents: async () => {
     try {
