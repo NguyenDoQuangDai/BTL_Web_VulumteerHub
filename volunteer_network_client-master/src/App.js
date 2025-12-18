@@ -12,6 +12,8 @@ import UserDashboard from './Components/UserDashboard/UserDashboard';
 import SearchResult from './Components/SearchResult/SearchResult';
 import AdminDashboard from './Pages/Admin/AdminDashboard';
 import AdminEvent from './Pages/Admin/AddEvent';
+import ManageUsersDashboard from './Pages/Admin/ManageUsersDashboard';
+import ManageEventsDashboard from './Pages/Admin/ManageEventsDashboard';
 import EventsPage from './Pages/Events/EventsPage';
 import Unauthorized from './Components/Unauthorized/Unauthorized';
 import { AuthProvider } from './contexts/AuthContext';
@@ -53,6 +55,14 @@ function App() {
 
           <Route exact path='/admin/addEvent'>
             <AdminEvent />
+          </Route>
+
+          <Route exact path='/admin/events'>
+            <ManageEventsDashboard />
+          </Route>
+
+          <Route exact path='/admin/users'>
+            <ManageUsersDashboard />
           </Route>
 
           <Route exact path='/unauthorized'>

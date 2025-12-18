@@ -3,6 +3,8 @@ import './Header.css';
 import logo from '../../assets/logos/logo.png';
 import { Link, useHistory } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faBell } from '@fortawesome/free-solid-svg-icons';
 //=============================================================================
 
 const Header = () => {
@@ -38,9 +40,6 @@ const Header = () => {
             {/* Home Navigation Click redirect to home */}
             <Link to='/home' className='nav-link active'>
               Home
-            </Link>
-            <Link to='/donation' className='nav-link' href='#'>
-              Donation
             </Link>
             <Link to='/events' className='nav-link' href='#'>
               Events
@@ -85,6 +84,9 @@ const Header = () => {
               <button type='button' className='btn btn-dark w-100'>
                 Admin
               </button>
+            </Link>
+            <Link to='/notifications' className='nav-link' title="Thông báo">
+              <FontAwesomeIcon icon={faBell} size="lg" className="text-secondary" />
             </Link>
           </div>
         </div>
