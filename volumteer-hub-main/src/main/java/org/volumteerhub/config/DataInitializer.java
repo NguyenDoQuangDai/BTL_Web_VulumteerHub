@@ -24,7 +24,7 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void createDefaultAdminUser() {
-        String adminUsername = "admin";
+        String adminUsername = "admin1@gmail.com";
         
         if (userRepository.findByUsername(adminUsername).isEmpty()) {
             User adminUser = User.builder()
