@@ -306,17 +306,6 @@ const EventDetails = ({ event, user }) => {
                 >
                   {registered ? 'Hủy đăng ký' : 'Đăng ký tham gia'}
                 </button>
-                <button
-                  type="button"
-                  className={`btn btn-sm ${interested ? 'btn-danger' : 'btn-outline-danger'}`}
-                  onClick={toggleInterested}
-                >
-                  <FontAwesomeIcon
-                    icon={interested ? faHeartSolid : faHeartRegular}
-                    className="mr-1"
-                  />
-                  {interested ? 'Đang quan tâm' : 'Quan tâm'}
-                </button>
             </div>
             <div>
                 {canEdit && (
@@ -385,10 +374,6 @@ const EventDetails = ({ event, user }) => {
           <div className='p-3 bg-light rounded'>
             <div className='h5 mb-0 text-primary'>{event.registeredCount || 0}</div>
             <small className='text-muted'>Đã tham gia</small>
-          </div>
-          <div className='p-3 bg-light rounded ml-3'>
-            <div className='h5 mb-0 text-danger'>{event.interestedCount || 0}</div>
-            <small className='text-muted'>Đã quan tâm</small>
           </div>
         </div>
       </div>

@@ -26,7 +26,7 @@ const SampleEventsGrid = () => {
 
   return (
     <div className="mt-4">
-      <h5 className="mb-3">Sự kiện mẫu</h5>
+      {/* <h5 className="mb-3">Sự kiện mẫu</h5> */}
       <div className="row">
         {events.map((evt) => (
           <div key={evt.id} className="col-12 col-sm-6 col-md-4 mb-4">

@@ -181,10 +181,10 @@ const UserDashboard = () => {
             <div className="row">
               <div className="col-md-6">
                 <div className="user-details-grid">
-                  <div className="detail-item">
+                  {/* <div className="detail-item">
                     <span className="detail-label">ID:</span>
                     <span className="detail-value">#{user.id || user._id || '---'}</span>
-                  </div>
+                  </div> */}
                   <div className="detail-item">
                     <span className="detail-label">Email:</span>
                     <span className="detail-value">{user.email || '---'}</span>

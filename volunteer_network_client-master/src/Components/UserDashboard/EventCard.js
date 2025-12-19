@@ -260,7 +260,6 @@ const EventCard = ({ evt }) => {
         <div className="d-flex justify-content-between align-items-start mb-2">
           <div className="d-flex flex-column text-muted small">
             <span className="mr-3"><strong>{adjustedRegisteredCount}</strong> đã tham gia</span>
-            <span><strong>{adjustedInterestedCount}</strong> đã quan tâm</span>
           </div>
           <div className="d-flex justify-content-end align-items-center">
             {canEdit && (
@@ -295,40 +294,41 @@ const EventCard = ({ evt }) => {
           <span className={statusClass(evt.status)}>{evt.status}</span>
         </div>
 
-        {evt.description && (
-          <div className="desc-line mb-2" style={{ minHeight: 48 }}>
-            <FontAwesomeIcon icon={faFileAlt} className="mr-1 desc-icon" />
-            <span className="text-muted">
-              {evt.description.length > 120 ? `${evt.description.slice(0, 120)}…` : evt.description}
-            </span>
-          </div>
-        )}
-
-        <ul className="list-unstyled small mb-3">
-          <li className="location-line">
-            <FontAwesomeIcon icon={faMapMarkerAlt} className="mr-1 location-icon" />
-            <strong>Địa điểm:</strong> {evt.location || '-'}
-          </li>
-          <li className="start-line">
-            <FontAwesomeIcon icon={faPlay} className="mr-1 start-icon" />
-            <strong>Bắt đầu:</strong> {formatDateTime(evt.startDate)}
-          </li>
-          <li className="end-line">
-            <FontAwesomeIcon icon={faStop} className="mr-1 end-icon" />
-            <strong>Kết thúc:</strong> {formatDateTime(evt.endDate)}
-          </li>
-          <li className="deadline-line">
-            <FontAwesomeIcon icon={faHourglassHalf} className="mr-1 deadline-icon" />
-            <strong>Hạn đăng ký:</strong> {formatDateTime(evt.dateDeadline)}
-          </li>
-          <li className="owner-line">
-            <FontAwesomeIcon icon={faUser} className="mr-1 owner-icon" />
-            <strong>Tạo bởi:</strong> {evt.username || evt.owner || evt.ownerId}
-          </li>
-        </ul>
+        <div className="desc-line mb-2 flex-grow-1" style={{ minHeight: 48 }}>
+          <FontAwesomeIcon icon={faFileAlt} className="mr-1 desc-icon" />
+          <span className="text-muted">
+            {evt.description 
+              ? (evt.description.length > 120 ? `${evt.description.slice(0, 120)}…` : evt.description)
+              : <i style={{ opacity: 0.6 }}>Chưa có mô tả cho sự kiện này</i>
+            }
+          </span>
+        </div>
 
         <div className="mt-auto">
-          <div className="d-flex justify-content-between align-items-center w-100">
+          <ul className="list-unstyled small mb-3">
+            <li className="location-line">
+              <FontAwesomeIcon icon={faMapMarkerAlt} className="mr-1 location-icon" />
+              <strong>Địa điểm:</strong> {evt.location || '-'}
+            </li>
+            <li className="start-line">
+              <FontAwesomeIcon icon={faPlay} className="mr-1 start-icon" />
+              <strong>Bắt đầu:</strong> {formatDateTime(evt.startDate)}
+            </li>
+            <li className="end-line">
+              <FontAwesomeIcon icon={faStop} className="mr-1 end-icon" />
+              <strong>Kết thúc:</strong> {formatDateTime(evt.endDate)}
+            </li>
+            <li className="deadline-line">
+              <FontAwesomeIcon icon={faHourglassHalf} className="mr-1 deadline-icon" />
+              <strong>Hạn đăng ký:</strong> {formatDateTime(evt.dateDeadline)}
+            </li>
+            <li className="owner-line">
+              <FontAwesomeIcon icon={faUser} className="mr-1 owner-icon" />
+              <strong>Tạo bởi:</strong> {evt.username || evt.owner || evt.ownerId}
+            </li>
+          </ul>
+
+          <div className="d-flex justify-content-center align-items-center w-100">
             <button
               type="button"
               className={`btn btn-sm cancel-btn ${registered ? '' : 'cancelled'} ${registerDisabled || cancelDisabled ? 'disabled-action' : ''}`}
@@ -347,20 +347,6 @@ const EventCard = ({ evt }) => {
               }}
             >
               {registered ? 'Hủy đăng ký' : 'Đăng ký'}
-            </button>
-            <button
-              type="button"
-              className={`btn btn-sm interest-btn ${interested ? 'interested' : ''}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleInterested();
-              }}
-            >
-              <FontAwesomeIcon
-                icon={interested ? faHeartSolid : faHeartRegular}
-                className="mr-1 interest-heart"
-              />
-              {interested ? 'Đang quan tâm' : 'Quan tâm'}
             </button>
           </div>
         </div>

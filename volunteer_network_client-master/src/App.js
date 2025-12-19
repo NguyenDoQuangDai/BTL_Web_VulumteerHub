@@ -29,9 +29,13 @@ function App() {
         {/* <Header /> */}
         <Switch>
           <Route exact path='/home'>
-            <Header />
-            <Home />
-            <Footer />
+            <div className="d-flex flex-column min-vh-100">
+              <Header />
+              <div className="flex-grow-1">
+                <Home />
+              </div>
+              <Footer />
+            </div>
           </Route>
 
           <Route exact path='/login'>
@@ -88,9 +92,13 @@ function App() {
           </Route>
 
           <Route exact path='/'>
-            <Header />
-            <Home />
-            <Footer />
+            <div className="d-flex flex-column min-vh-100">
+              <Header />
+              <div className="flex-grow-1">
+                <Home />
+              </div>
+              <Footer />
+            </div>
           </Route>
 
           <Route path='*'>

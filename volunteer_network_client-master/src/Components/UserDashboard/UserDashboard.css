@@ -452,7 +452,7 @@
     color: #ffffff !important;
     background-color: #dc3545 !important;
     transition: all 0.2s ease-in-out;
-    width: 150px; /* Fixed width */
+    width: 100%; /* Full width */
     display: inline-flex;
     justify-content: center;
     align-items: center;
@@ -634,3 +634,11 @@
         max-width: 200px;
     }
 }
+.event-card {
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    height: 450px !important; /* Fixed height */
+}
+

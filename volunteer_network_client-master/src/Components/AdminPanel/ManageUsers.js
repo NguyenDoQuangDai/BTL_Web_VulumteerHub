@@ -36,6 +36,8 @@ const ManageUsers = () => {
   const [userList, setUserList] = useState(sampleUsers);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showExportDialog, setShowExportDialog] = useState(false);
+  const [showRoleConfirm, setShowRoleConfirm] = useState(false);
+  const [pendingRoleChange, setPendingRoleChange] = useState(null);
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
@@ -98,6 +100,27 @@ const ManageUsers = () => {
 
   const updateUserRole = (_id, role) => {
     setUserList((list) => list.map((u) => (u._id === _id ? { ...u, role } : u)));
+  };
+
+  const handleRoleChangeRequest = (_id, newRole) => {
+    const user = userList.find(u => u._id === _id);
+    if (user && user.role !== newRole) {
+      setPendingRoleChange({ _id, newRole, name: user.name, oldRole: user.role });
+      setShowRoleConfirm(true);
+    }
+  };
+
+  const confirmRoleChange = () => {
+    if (pendingRoleChange) {
+      updateUserRole(pendingRoleChange._id, pendingRoleChange.newRole);
+      setPendingRoleChange(null);
+      setShowRoleConfirm(false);
+    }
+  };
+
+  const cancelRoleChange = () => {
+    setPendingRoleChange(null);
+    setShowRoleConfirm(false);
   };
 
   const bulkDelete = () => {
@@ -189,7 +212,6 @@ const ManageUsers = () => {
               >
                 <option value=''>Tất cả vai trò</option>
                 <option value='User'>User</option>
-                <option value='Manager'>Manager</option>
                 <option value='Admin'>Admin</option>
               </select>
             </div>
@@ -255,10 +277,9 @@ const ManageUsers = () => {
                     <select
                       className='form-control form-control-sm'
                       value={userItem.role}
-                      onChange={(e) => updateUserRole(userItem._id, e.target.value)}
+                      onChange={(e) => handleRoleChangeRequest(userItem._id, e.target.value)}
                     >
                       <option value='User'>User</option>
-                      <option value='Manager'>Manager</option>
                       <option value='Admin'>Admin</option>
                     </select>
                   </td>
@@ -387,6 +408,27 @@ const ManageUsers = () => {
           </div>,
           document.body
         )}
+      {showRoleConfirm && pendingRoleChange && ReactDOM.createPortal(
+        <div className="modal-overlay" onClick={cancelRoleChange} style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', zIndex: 1050
+        }}>
+          <div className="bg-white rounded p-4 shadow" style={{ maxWidth: '400px', width: '100%' }} onClick={e => e.stopPropagation()}>
+            <h5 className="mb-3">Xác nhận thay đổi vai trò</h5>
+            <p>
+              Bạn có chắc chắn muốn thay đổi vai trò của <strong>{pendingRoleChange.name}</strong> từ 
+              <span className="badge badge-secondary mx-1">{pendingRoleChange.oldRole}</span> sang 
+              <span className="badge badge-primary mx-1">{pendingRoleChange.newRole}</span>?
+            </p>
+            <div className="d-flex justify-content-end mt-4">
+              <button className="btn btn-light mr-2" onClick={cancelRoleChange}>Hủy</button>
+              <button className="btn btn-primary" onClick={confirmRoleChange}>Xác nhận</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </>
   );
 };

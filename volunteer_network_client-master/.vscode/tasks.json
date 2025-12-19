@@ -12,6 +12,18 @@
 			"isBackground": false,
 			"problemMatcher": [],
 			"group": "none"
+		},
+		{
+			"label": "append_css_event_card",
+			"type": "shell",
+			"command": "Add-Content",
+			"args": [
+				"d:\\web\\BTL_Web_VulumteerHub\\volunteer_network_client-master\\src\\Components\\UserDashboard\\UserDashboard.css",
+				"\n.event-card {\n    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;\n    border: none;\n    border-radius: 12px;\n    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);\n    height: 450px !important; /* Fixed height */\n}\n"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "none"
 		}
 	]
 }
