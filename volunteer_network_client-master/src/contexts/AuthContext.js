@@ -135,11 +135,21 @@ export const AuthProvider = ({ children }) => {
     dispatch({ type: AUTH_ACTIONS.CLEAR_ERROR });
   };
 
+  // Update user function
+  const updateUser = (updatedUser) => {
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+    dispatch({
+      type: AUTH_ACTIONS.LOGIN_SUCCESS,
+      payload: { user: updatedUser },
+    });
+  };
+
   const value = {
     ...state,
     login,
     logout,
     clearError,
+    updateUser,
   };
 
   return (

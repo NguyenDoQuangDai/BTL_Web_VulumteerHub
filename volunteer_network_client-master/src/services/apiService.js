@@ -11,7 +11,16 @@ export const authService = {
       
       if (response && response.token) {
         localStorage.setItem('token', response.token);
-        const userObj = response.user || (response.username ? { username: response.username } : null);
+        // Construct user object if not provided directly
+        const userObj = response.user || (response.username ? { 
+          username: response.username,
+          role: response.role || (Array.isArray(response.roles) ? response.roles[0] : response.roles) || 'Tình nguyện viên',
+          id: response.id,
+          fullName: response.fullName,
+          avatar: response.avatar,
+          createdAt: response.createdAt || response.registrationDate || new Date().toISOString()
+        } : null);
+
         if (userObj) {
           localStorage.setItem('user', JSON.stringify(userObj));
         } else {
