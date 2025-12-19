@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import EventChannelSidebar from './EventChannelSidebar';
+import EditHistoryModal from './EditHistoryModal';
+import { useAuth } from '../../contexts/AuthContext';
 import './EventChannelDashboard.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -25,7 +27,11 @@ import {
   faPaperPlane,
   faEllipsisH,
   faGlobeAmericas,
+  faThumbtack,
+  faHistory,
+  faHeart as faHeartSolid,
 } from '@fortawesome/free-solid-svg-icons';
+import { faHeart as faHeartRegular } from '@fortawesome/free-regular-svg-icons';
 
 const statusClass = (status) => {
   switch (status) {
@@ -112,7 +118,7 @@ const ImageCarousel = ({ images }) => {
   );
 };
 
-const EventDetails = ({ event }) => {
+const EventDetails = ({ event, user }) => {
   let eventImages = event.images || event.imageUrls || (event.imageUrl ? [event.imageUrl] : []);
 
   // Fallback to sample images if no images are provided
@@ -124,14 +130,216 @@ const EventDetails = ({ event }) => {
     ];
   }
 
+  // Permission logic
+  const isOwner = user && (
+    (event.username && user.username === event.username) ||
+    (event.owner && user.username === event.owner)
+  );
+  const isAdmin = user && (user.role === 'Quản trị viên' || user.role === 'ADMIN');
+  const isManager = user && (user.role === 'Quản lý sự kiện' || user.role === 'EVENT_MANAGER');
+
+  const canEdit = isOwner || isAdmin;
+  const canDelete = isOwner || isAdmin;
+
+  // Logic for Register/Interested (similar to EventCard)
+  const readInterested = () => {
+    try {
+      const raw = localStorage.getItem('interestedEvents');
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch {
+      return new Set();
+    }
+  };
+
+  const writeInterested = (set) => {
+    try {
+      localStorage.setItem('interestedEvents', JSON.stringify(Array.from(set)));
+    } catch {}
+  };
+
+  const readRegistered = () => {
+    try {
+      const raw = localStorage.getItem('registeredEvents');
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch {
+      return new Set();
+    }
+  };
+
+  const writeRegistered = (set) => {
+    try {
+      localStorage.setItem('registeredEvents', JSON.stringify(Array.from(set)));
+    } catch {}
+  };
+
+  const [interested, setInterested] = useState(() => readInterested().has(event.id));
+  const [registered, setRegistered] = useState(() => readRegistered().has(event.id));
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: event.name || '',
+    description: event.description || '',
+    location: event.location || '',
+    dateDeadline: event.dateDeadline || '',
+    startDate: event.startDate || '',
+    endDate: event.endDate || '',
+    images: event.images || (event.image || event.imageUrl ? [event.image || event.imageUrl] : []),
+  });
+
+  const handleImageChange = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const files = Array.from(e.target.files);
+      Promise.all(files.map(file => {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      }))
+      .then(results => {
+        setEditForm(prev => ({ ...prev, images: [...(prev.images || []), ...results] }));
+      });
+    }
+  };
+
+  const removeImage = (index) => {
+    setEditForm(prev => ({
+      ...prev,
+      images: prev.images.filter((_, i) => i !== index)
+    }));
+  };
+
+  const hasUnsavedChanges = () => {
+    return (
+      editForm.name !== (event.name || '') ||
+      editForm.description !== (event.description || '') ||
+      editForm.location !== (event.location || '') ||
+      editForm.dateDeadline !== (event.dateDeadline || '') ||
+      editForm.startDate !== (event.startDate || '') ||
+      editForm.endDate !== (event.endDate || '') ||
+      JSON.stringify(editForm.images) !== JSON.stringify(event.images || (event.image || event.imageUrl ? [event.image || event.imageUrl] : []))
+    );
+  };
+
+  const handleEditFormChange = (e) => {
+    const { name, value } = e.target;
+    setEditForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleEditClose = () => {
+    if (hasUnsavedChanges()) {
+      setShowUnsavedConfirm(true);
+    } else {
+      setShowEditForm(false);
+    }
+  };
+
+  const handleSaveChanges = () => {
+    try {
+      const mockEvents = JSON.parse(localStorage.getItem('mockEvents') || '[]');
+      const index = mockEvents.findIndex(e => e.id === event.id);
+      if (index !== -1) {
+        const updatedEvent = {
+          ...mockEvents[index],
+          ...editForm
+        };
+        mockEvents[index] = updatedEvent;
+        localStorage.setItem('mockEvents', JSON.stringify(mockEvents));
+        window.dispatchEvent(new Event('storage'));
+      }
+    } catch (e) {
+      console.error("Failed to update local event", e);
+    }
+    setShowEditForm(false);
+  };
+
+  const toggleInterested = () => {
+    const s = readInterested();
+    if (s.has(event.id)) {
+      s.delete(event.id);
+      setInterested(false);
+    } else {
+      s.add(event.id);
+      setInterested(true);
+    }
+    writeInterested(s);
+  };
+
+  const handleRegister = () => {
+    if (registered) {
+      setShowConfirm(true);
+    } else {
+      const s = readRegistered();
+      s.add(event.id);
+      writeRegistered(s);
+      setRegistered(true);
+    }
+  };
+
+  const confirmUnregister = () => {
+    const s = readRegistered();
+    s.delete(event.id);
+    writeRegistered(s);
+    setRegistered(false);
+    setShowConfirm(false);
+  };
+
   return (
-    <div className='p-4 bg-white rounded shadow-sm'>
+    <div className='p-4 bg-white rounded shadow-sm position-relative'>
       <ImageCarousel images={eventImages} />
       
       <div className='mb-4'>
         <div className='d-flex justify-content-between align-items-start mb-2'>
           <h4 className='mb-0'>{event.name}</h4>
           <span className={statusClass(event.status)}>{event.status}</span>
+        </div>
+        
+        {/* Action Buttons */}
+        <div className="d-flex mt-3 justify-content-between align-items-center">
+            <div>
+                <button
+                  type="button"
+                  className={`btn btn-sm mr-2 ${registered ? 'btn-outline-danger' : 'btn-primary'}`}
+                  onClick={handleRegister}
+                >
+                  {registered ? 'Hủy đăng ký' : 'Đăng ký tham gia'}
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${interested ? 'btn-danger' : 'btn-outline-danger'}`}
+                  onClick={toggleInterested}
+                >
+                  <FontAwesomeIcon
+                    icon={interested ? faHeartSolid : faHeartRegular}
+                    className="mr-1"
+                  />
+                  {interested ? 'Đang quan tâm' : 'Quan tâm'}
+                </button>
+            </div>
+            <div>
+                {canEdit && (
+                    <button 
+                        className="btn btn-sm btn-outline-secondary mr-2"
+                        onClick={() => setShowEditForm(true)}
+                    >
+                        <FontAwesomeIcon icon={faEdit} className="mr-1" /> Sửa
+                    </button>
+                )}
+                {canDelete && (
+                    <button 
+                        className="btn btn-sm btn-outline-danger"
+                        onClick={() => {
+                            if(window.confirm('Bạn có chắc chắn muốn xóa sự kiện này?')) {
+                                alert('Đã xóa sự kiện (Demo)');
+                            }
+                        }}
+                    >
+                        <FontAwesomeIcon icon={faTrashAlt} className="mr-1" /> Xóa
+                    </button>
+                )}
+            </div>
         </div>
       </div>
 
@@ -166,7 +374,7 @@ const EventDetails = ({ event }) => {
           </li>
           <li className='mb-2'>
             <FontAwesomeIcon icon={faUser} className='mr-2 text-info' />
-            <strong>Owner ID:</strong> {event.ownerId}
+            <strong>Tạo bởi:</strong> {event.username || event.ownerId}
           </li>
         </ul>
       </div>
@@ -184,6 +392,204 @@ const EventDetails = ({ event }) => {
           </div>
         </div>
       </div>
+
+      {/* Unregister Confirmation Modal */}
+      {showConfirm && (
+          ReactDOM.createPortal(
+            <div className="modal-backdrop d-flex align-items-center justify-content-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10000 }}>
+              <div className="bg-white rounded shadow p-4" style={{ maxWidth: '400px' }}>
+                <h5 className="mb-3">Xác nhận hủy đăng ký</h5>
+                <p>Bạn có chắc chắn muốn hủy đăng ký tham gia sự kiện này không?</p>
+                <div className="d-flex justify-content-end">
+                  <button className="btn btn-secondary mr-2" onClick={() => setShowConfirm(false)}>Không</button>
+                  <button className="btn btn-danger" onClick={confirmUnregister}>Có, hủy đăng ký</button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+      )}
+
+      {/* Unsaved Changes Confirmation Modal */}
+      {showUnsavedConfirm && ReactDOM.createPortal(
+        <div className="modal-backdrop d-flex align-items-center justify-content-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10000 }}>
+          <div className="bg-white rounded shadow p-4" style={{ maxWidth: '400px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="text-right mb-2">
+              <button type="button" className="btn btn-sm btn-outline-secondary close-btn" onClick={() => setShowUnsavedConfirm(false)}>×</button>
+            </div>
+            <p className="mb-3">Bạn có thay đổi chưa lưu, lưu thay đổi?</p>
+            <div className="d-flex justify-content-between">
+              <button className="btn btn-light" onClick={() => {
+                setShowUnsavedConfirm(false);
+                setShowEditForm(false);
+              }}>Hủy</button>
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  handleSaveChanges();
+                  setShowUnsavedConfirm(false);
+                }}
+              >
+                Lưu
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Edit Form Modal */}
+      {showEditForm && ReactDOM.createPortal(
+        <div className="modal-backdrop d-flex align-items-center justify-content-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10000 }} onClick={handleEditClose}>
+          <div className="bg-white rounded shadow p-4" style={{ width: '100%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <h5 className="mb-0">Sửa sự kiện</h5>
+              <button type="button" className="btn btn-outline-secondary btn-sm" onClick={handleEditClose}>
+                Đóng
+              </button>
+            </div>
+
+            <form>
+              <div className="form-group">
+                <label className="field-label event-title">Tên sự kiện *</label>
+                <input
+                  type="text"
+                  name="name"
+                  className="form-control"
+                  value={editForm.name}
+                  onChange={handleEditFormChange}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="field-label location-line">
+                  <FontAwesomeIcon icon={faMapMarkerAlt} className="mr-1 location-icon" />
+                  Địa điểm
+                </label>
+                <input
+                  type="text"
+                  name="location"
+                  className="form-control"
+                  placeholder="Ví dụ: Nhà văn hóa X, Quận 1"
+                  value={editForm.location}
+                  onChange={handleEditFormChange}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="field-label desc-line">
+                  <FontAwesomeIcon icon={faFileAlt} className="mr-1 desc-icon" />
+                  Mô tả
+                </label>
+                <textarea
+                  name="description"
+                  className="form-control"
+                  rows="3"
+                  value={editForm.description}
+                  onChange={handleEditFormChange}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="field-label">
+                  <FontAwesomeIcon icon={faImage} className="mr-1" />
+                  Hình ảnh
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="form-control-file"
+                  onChange={handleImageChange}
+                />
+                <div className="d-flex flex-wrap mt-2">
+                  {editForm.images && editForm.images.map((img, index) => (
+                    <div key={index} className="position-relative mr-2 mb-2">
+                      <img 
+                        src={img} 
+                        alt={`Preview ${index}`} 
+                        style={{ height: '100px', width: '100px', objectFit: 'cover', borderRadius: '4px' }} 
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-sm position-absolute"
+                        style={{ top: 0, right: 0, padding: '0px 5px', fontSize: '12px', lineHeight: '1.2' }}
+                        onClick={() => removeImage(index)}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group col-md-4">
+                  <label className="field-label deadline-line">
+                    <FontAwesomeIcon icon={faHourglassHalf} className="mr-1 deadline-icon" />
+                    Hạn đăng ký *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    name="dateDeadline"
+                    className="form-control"
+                    value={editForm.dateDeadline ? new Date(editForm.dateDeadline).toISOString().slice(0, 16) : ''}
+                    onChange={handleEditFormChange}
+                    required
+                  />
+                </div>
+                <div className="form-group col-md-4">
+                  <label className="field-label start-line">
+                    <FontAwesomeIcon icon={faPlay} className="mr-1 start-icon" />
+                    Bắt đầu *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    name="startDate"
+                    className="form-control"
+                    value={editForm.startDate ? new Date(editForm.startDate).toISOString().slice(0, 16) : ''}
+                    onChange={handleEditFormChange}
+                    required
+                  />
+                </div>
+                <div className="form-group col-md-4">
+                  <label className="field-label end-line">
+                    <FontAwesomeIcon icon={faStop} className="mr-1 end-icon" />
+                    Kết thúc *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    name="endDate"
+                    className="form-control"
+                    value={editForm.endDate ? new Date(editForm.endDate).toISOString().slice(0, 16) : ''}
+                    onChange={handleEditFormChange}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="text-right mt-4">
+                <button
+                  type="button"
+                  className="btn btn-secondary mr-2"
+                  onClick={handleEditClose}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleSaveChanges}
+                >
+                  Lưu thay đổi
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };
@@ -393,32 +799,84 @@ const MembersList = () => {
   );
 };
 
-const DiscussionTab = ({ event }) => {
+const getRoleLevel = (role) => {
+    if (!role) return 0;
+    const r = role.toUpperCase();
+    if (r === 'QUẢN TRỊ VIÊN' || r === 'ADMIN') return 3;
+    if (r === 'QUẢN LÝ SỰ KIỆN' || r === 'EVENT_MANAGER') return 2;
+    return 1;
+};
+
+const getRoleBadgeClass = (role) => {
+    if (!role) return 'badge-secondary';
+    const r = role.toUpperCase();
+    if (r === 'QUẢN TRỊ VIÊN' || r === 'ADMIN') return 'badge-danger';
+    if (r === 'QUẢN LÝ SỰ KIỆN' || r === 'EVENT_MANAGER') return 'badge-warning text-dark';
+    return 'badge-secondary';
+};
+
+const DiscussionTab = ({ event, user }) => {
   const [replyingTo, setReplyingTo] = useState(null);
-  const [posts, setPosts] = useState([
-    {
-      id: 1,
-      user: 'Nguyễn Văn A',
-      role: 'Quản trị viên',
-      time: '2 giờ trước',
-      content: 'Chào mọi người! Ngày mai chúng ta sẽ tập trung tại sảnh chính lúc 7:00 sáng nhé. Mọi người nhớ mặc áo đồng phục.',
-      likes: 12,
-      comments: 3,
-      shares: 0,
-      liked: true
-    },
-    {
-      id: 2,
-      user: 'Trần Thị B',
-      role: 'Tình nguyện viên',
-      time: '5 giờ trước',
-      content: 'Mình có thể đến muộn khoảng 15 phút được không ạ? Xe bus chuyến sớm nhất 6:30 mới chạy.',
-      likes: 2,
-      comments: 5,
-      shares: 0,
-      liked: false
+  const [activeMenuPostId, setActiveMenuPostId] = useState(null);
+  const [editingPostId, setEditingPostId] = useState(null);
+  const [editContent, setEditContent] = useState('');
+  const [viewingHistoryPostId, setViewingHistoryPostId] = useState(null);
+
+  const [posts, setPosts] = useState(() => {
+    try {
+      const allPosts = JSON.parse(localStorage.getItem('forum_posts') || '{}');
+      if (allPosts[event.id]) {
+        return allPosts[event.id];
+      }
+      // Default sample posts
+      return [
+        {
+          id: 1,
+          user: 'Nguyễn Văn A',
+          username: 'nguyenvana',
+          role: 'Quản trị viên',
+          time: '2 giờ trước',
+          content: 'Chào mọi người! Ngày mai chúng ta sẽ tập trung tại sảnh chính lúc 7:00 sáng nhé. Mọi người nhớ mặc áo đồng phục.',
+          likes: 12,
+          comments: 3,
+          shares: 0,
+          liked: true,
+          isPinned: true,
+          isJoined: true,
+          editHistory: [
+              { content: 'Chào mọi người! Ngày mai tập trung lúc 7h nhé.', time: '2 giờ trước' }
+          ]
+        },
+        {
+          id: 2,
+          user: 'Trần Thị B',
+          username: 'tranthib',
+          role: 'Tình nguyện viên',
+          time: '5 giờ trước',
+          content: 'Mình có thể đến muộn khoảng 15 phút được không ạ? Xe bus chuyến sớm nhất 6:30 mới chạy.',
+          likes: 2,
+          comments: 5,
+          shares: 0,
+          liked: false,
+          isPinned: false,
+          isJoined: false,
+          editHistory: []
+        }
+      ];
+    } catch (e) {
+      return [];
     }
-  ]);
+  });
+
+  useEffect(() => {
+    try {
+      const allPosts = JSON.parse(localStorage.getItem('forum_posts') || '{}');
+      allPosts[event.id] = posts;
+      localStorage.setItem('forum_posts', JSON.stringify(allPosts));
+    } catch (e) {
+      console.error("Failed to save posts", e);
+    }
+  }, [posts, event.id]);
 
   const [newPostContent, setNewPostContent] = useState('');
 
@@ -426,19 +884,75 @@ const DiscussionTab = ({ event }) => {
     if (!newPostContent.trim()) return;
     const newPost = {
       id: Date.now(),
-      user: 'Tôi', // Current user placeholder
-      role: 'Thành viên',
+      user: user ? (user.name || user.username) : 'Khách',
+      username: user ? user.username : 'guest',
+      role: user ? (user.role || 'Thành viên') : 'Thành viên',
       time: 'Vừa xong',
       content: newPostContent,
       likes: 0,
       comments: 0,
       shares: 0,
       liked: false,
-      commentsList: []
+      commentsList: [],
+      isPinned: false,
+      isJoined: true,
+      editHistory: []
     };
     setPosts([newPost, ...posts]);
     setNewPostContent('');
   };
+
+  const handleDeletePost = (postId) => {
+      if (window.confirm('Bạn có chắc chắn muốn xóa bài viết này?')) {
+          setPosts(posts.filter(p => p.id !== postId));
+      }
+      setActiveMenuPostId(null);
+  };
+
+  const handleEditPost = (post) => {
+      setEditingPostId(post.id);
+      setEditContent(post.content);
+      setActiveMenuPostId(null);
+  };
+
+  const handleSaveEdit = (postId) => {
+      setPosts(posts.map(p => {
+          if (p.id === postId) {
+              const historyEntry = {
+                  content: p.content,
+                  time: new Date().toLocaleString('vi-VN')
+              };
+              return { 
+                  ...p, 
+                  content: editContent,
+                  editHistory: [historyEntry, ...(p.editHistory || [])]
+              };
+          }
+          return p;
+      }));
+      setEditingPostId(null);
+      setEditContent('');
+  };
+
+   const handleCancelEdit = () => {
+      setEditingPostId(null);
+      setEditContent('');
+  };
+
+  const handlePinPost = (postId) => {
+      setPosts(posts.map(p => {
+          if (p.id === postId) {
+              return { ...p, isPinned: !p.isPinned };
+          }
+          return p;
+      }));
+      setActiveMenuPostId(null);
+  };
+
+  const sortedPosts = [...posts].sort((a, b) => {
+      if (a.isPinned === b.isPinned) return 0;
+      return a.isPinned ? -1 : 1;
+  });
 
   const handleLike = (postId) => {
     setPosts(posts.map(post => {
@@ -613,27 +1127,102 @@ const DiscussionTab = ({ event }) => {
       </div>
 
       {/* Posts Feed */}
-      {posts.map(post => (
-        <div key={post.id} className="bg-white rounded shadow-sm mb-3">
+      {sortedPosts.map(post => (
+        <div key={post.id} className={`bg-white rounded shadow-sm mb-3 ${post.isPinned ? 'border border-primary' : ''}`}>
             <div className="p-3">
+                {post.isPinned && (
+                    <div className="text-primary small font-weight-bold mb-2">
+                        <FontAwesomeIcon icon={faThumbtack} className="mr-1" /> Đã ghim
+                    </div>
+                )}
                 <div className="d-flex justify-content-between align-items-start mb-2">
                     <div className="d-flex">
                         <div className="bg-light rounded-circle d-flex align-items-center justify-content-center mr-2" style={{ width: '40px', height: '40px' }}>
                             <FontAwesomeIcon icon={faUser} className="text-secondary" />
                         </div>
                         <div>
-                            <div className="font-weight-bold text-dark" style={{ lineHeight: '1.2' }}>{post.user}</div>
+                            <div className="d-flex align-items-center">
+                                <div className="font-weight-bold text-dark mr-2" style={{ lineHeight: '1.2' }}>{post.user}</div>
+                                {post.role && <span className="badge badge-light text-secondary border mr-2" style={{fontSize: '0.7rem'}}>{post.role}</span>}
+                                <span className={`badge ${post.isJoined ? 'badge-success' : 'badge-secondary'} font-weight-normal`} style={{fontSize: '0.65rem'}}>
+                                    {post.isJoined ? 'Đã tham gia' : 'Chưa tham gia'}
+                                </span>
+                            </div>
                             <div className="small text-muted">
                                 {post.time} · <FontAwesomeIcon icon={faGlobeAmericas} size="xs" />
+                                {post.editHistory && post.editHistory.length > 0 && (
+                                    <span className="ml-1 text-muted font-italic" style={{ cursor: 'pointer' }} onClick={() => setViewingHistoryPostId(post.id)}>
+                                        · Đã chỉnh sửa
+                                    </span>
+                                )}
                             </div>
                         </div>
                     </div>
-                    <button className="btn btn-link text-secondary p-0">
-                        <FontAwesomeIcon icon={faEllipsisH} />
-                    </button>
+                    <div className="position-relative">
+                        <button 
+                            className="btn btn-link text-secondary p-0"
+                            onClick={() => setActiveMenuPostId(activeMenuPostId === post.id ? null : post.id)}
+                        >
+                            <FontAwesomeIcon icon={faEllipsisH} />
+                        </button>
+                        {activeMenuPostId === post.id && (
+                            <div className="position-absolute bg-white shadow-sm rounded border py-1" style={{ right: 0, top: '100%', zIndex: 100, minWidth: '180px' }}>
+                                {(user && (user.role === 'Quản trị viên' || user.role === 'Quản lý sự kiện' || user.role === 'ADMIN' || user.role === 'EVENT_MANAGER')) && (
+                                    <button 
+                                        className="dropdown-item small" 
+                                        onClick={() => handlePinPost(post.id)}
+                                    >
+                                        <FontAwesomeIcon icon={faThumbtack} className="mr-2" /> {post.isPinned ? 'Bỏ ghim' : 'Ghim bài viết'}
+                                    </button>
+                                )}
+                                {post.editHistory && post.editHistory.length > 0 && (
+                                    <button 
+                                        className="dropdown-item small" 
+                                        onClick={() => {
+                                            setViewingHistoryPostId(post.id);
+                                            setActiveMenuPostId(null);
+                                        }}
+                                    >
+                                        <FontAwesomeIcon icon={faHistory} className="mr-2" /> Xem lịch sử chỉnh sửa
+                                    </button>
+                                )}
+                                {(user && (user.username === post.username)) && (
+                                    <button 
+                                        className="dropdown-item small" 
+                                        onClick={() => handleEditPost(post)}
+                                    >
+                                        <FontAwesomeIcon icon={faEdit} className="mr-2" /> Sửa bài viết
+                                    </button>
+                                )}
+                                {(user && (user.username === post.username || getRoleLevel(user.role) > getRoleLevel(post.role))) && (
+                                    <button 
+                                        className="dropdown-item text-danger small" 
+                                        onClick={() => handleDeletePost(post.id)}
+                                    >
+                                        <FontAwesomeIcon icon={faTrashAlt} className="mr-2" /> Xóa bài viết
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
                 <div className="mb-2">
-                    {post.content}
+                    {editingPostId === post.id ? (
+                        <div>
+                            <textarea 
+                                className="form-control mb-2" 
+                                value={editContent}
+                                onChange={(e) => setEditContent(e.target.value)}
+                                rows="3"
+                            />
+                            <div className="d-flex justify-content-end">
+                                <button className="btn btn-sm btn-secondary mr-2" onClick={handleCancelEdit}>Hủy</button>
+                                <button className="btn btn-sm btn-primary" onClick={() => handleSaveEdit(post.id)}>Lưu</button>
+                            </div>
+                        </div>
+                    ) : (
+                        post.content
+                    )}
                 </div>
             </div>
             
@@ -774,30 +1363,76 @@ const DiscussionTab = ({ event }) => {
             </div>
         </div>
       ))}
+      {/* Edit History Modal */}
+      <EditHistoryModal 
+          isOpen={!!viewingHistoryPostId}
+          onClose={() => setViewingHistoryPostId(null)}
+          history={posts.find(p => p.id === viewingHistoryPostId)?.editHistory || []}
+      />
     </div>
   );
 };
 
 const EventChannelDashboard = ({ event, onClose }) => {
+  const { user: authUser } = useAuth();
+  // Ensure user has a role for testing purposes (Default to 'Quản trị viên' if missing)
+  const user = authUser ? { ...authUser, role: authUser.role || 'Quản trị viên' } : null;
+  
   const [activeTab, setActiveTab] = useState('details');
   const [followItems, setFollowItems] = useState([]);
   const [isCreatingFollow, setIsCreatingFollow] = useState(false);
   const [followText, setFollowText] = useState('');
+  const [editingFollowId, setEditingFollowId] = useState(null);
+  const [editFollowContent, setEditFollowContent] = useState('');
 
   const handleAddFollowItem = () => {
     if (followText.trim()) {
-      setFollowItems([{ id: Date.now(), content: followText, time: new Date().toLocaleString('vi-VN') }, ...followItems]);
+      setFollowItems([{ 
+        id: Date.now(), 
+        content: followText, 
+        time: new Date().toLocaleString('vi-VN'),
+        user: user ? (user.name || user.username) : 'Admin',
+        username: user ? user.username : 'admin',
+        role: user ? (user.role || 'Quản trị viên') : 'Quản trị viên'
+      }, ...followItems]);
       setFollowText('');
       setIsCreatingFollow(false);
     }
   };
 
+  const handleDeleteFollowItem = (id) => {
+      if (window.confirm('Bạn có chắc chắn muốn xóa thông báo này?')) {
+          setFollowItems(followItems.filter(item => item.id !== id));
+      }
+  };
+
+  const handleEditFollowItem = (item) => {
+      setEditingFollowId(item.id);
+      setEditFollowContent(item.content);
+  };
+
+  const handleSaveEditFollowItem = (id) => {
+      setFollowItems(followItems.map(item => {
+          if (item.id === id) {
+              return { ...item, content: editFollowContent };
+          }
+          return item;
+      }));
+      setEditingFollowId(null);
+      setEditFollowContent('');
+  };
+
+  const handleCancelEditFollowItem = () => {
+      setEditingFollowId(null);
+      setEditFollowContent('');
+  };
+
   const renderContent = () => {
     switch (activeTab) {
       case 'details':
-        return <EventDetails event={event} />;
+        return <EventDetails event={event} user={user} />;
       case 'discussion':
-        return <DiscussionTab event={event} />;
+        return <DiscussionTab event={event} user={user} />;
       case 'members':
         return <MembersList />;
       case 'notifications':
@@ -809,12 +1444,14 @@ const EventChannelDashboard = ({ event, onClose }) => {
                         <FontAwesomeIcon icon={faBell} className="mr-2" />
                         Bảng tin theo dõi
                     </h6>
-                    <button 
-                        className={`btn btn-sm ${isCreatingFollow ? 'btn-outline-danger' : 'btn-outline-primary'}`}
-                        onClick={() => setIsCreatingFollow(!isCreatingFollow)}
-                    >
-                        {isCreatingFollow ? 'Hủy' : 'Tạo thông báo'}
-                    </button>
+                    {(user && getRoleLevel(user.role) >= 2) && (
+                        <button 
+                            className={`btn btn-sm ${isCreatingFollow ? 'btn-outline-danger' : 'btn-outline-primary'}`}
+                            onClick={() => setIsCreatingFollow(!isCreatingFollow)}
+                        >
+                            {isCreatingFollow ? 'Hủy' : 'Tạo thông báo'}
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -853,13 +1490,58 @@ const EventChannelDashboard = ({ event, onClose }) => {
                 <div>
                     {followItems.map((item, index) => (
                         <div key={item.id} className={`mb-3 pb-3 ${index !== followItems.length - 1 ? 'border-bottom' : ''}`}>
-                            <div className="d-flex align-items-center mb-2">
-                                <span className="badge badge-info mr-2">Mới</span>
-                                <small className="text-muted">{item.time}</small>
+                            <div className="d-flex align-items-center mb-2 justify-content-between">
+                                <div className="d-flex align-items-center">
+                                    <div className="bg-light rounded-circle d-flex align-items-center justify-content-center mr-2" style={{ width: '36px', height: '36px' }}>
+                                        <FontAwesomeIcon icon={faUser} className="text-secondary" />
+                                    </div>
+                                    <div>
+                                        <div className="font-weight-bold small">
+                                            {item.user} <span className="text-muted font-weight-normal">(@{item.username})</span>
+                                        </div>
+                                        <div className="d-flex align-items-center">
+                                            <span className={`badge ${getRoleBadgeClass(item.role)} mr-2`} style={{fontSize: '0.7rem'}}>{item.role}</span>
+                                            <small className="text-muted">{item.time}</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                {(user && getRoleLevel(user.role) >= 2) && (
+                                    <div>
+                                        <button 
+                                            className="btn btn-link text-secondary p-0 mr-2"
+                                            onClick={() => handleEditFollowItem(item)}
+                                            title="Sửa"
+                                        >
+                                            <FontAwesomeIcon icon={faEdit} size="sm" />
+                                        </button>
+                                        <button 
+                                            className="btn btn-link text-danger p-0"
+                                            onClick={() => handleDeleteFollowItem(item.id)}
+                                            title="Xóa"
+                                        >
+                                            <FontAwesomeIcon icon={faTrashAlt} size="sm" />
+                                        </button>
+                                    </div>
+                                )}
                             </div>
-                            <p className="mb-0 text-dark" style={{ whiteSpace: 'pre-wrap' }}>
-                                {item.content}
-                            </p>
+                            {editingFollowId === item.id ? (
+                                <div className="mt-2">
+                                    <textarea 
+                                        className="form-control mb-2" 
+                                        value={editFollowContent}
+                                        onChange={(e) => setEditFollowContent(e.target.value)}
+                                        rows="3"
+                                    />
+                                    <div className="d-flex justify-content-end">
+                                        <button className="btn btn-sm btn-secondary mr-2" onClick={handleCancelEditFollowItem}>Hủy</button>
+                                        <button className="btn btn-sm btn-primary" onClick={() => handleSaveEditFollowItem(item.id)}>Lưu</button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className="mb-0 text-dark mt-2 pl-1" style={{ whiteSpace: 'pre-wrap' }}>
+                                    {item.content}
+                                </p>
+                            )}
                         </div>
                     ))}
                 </div>

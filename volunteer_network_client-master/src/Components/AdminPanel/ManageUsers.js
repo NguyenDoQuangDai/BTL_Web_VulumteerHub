@@ -154,20 +154,13 @@ const ManageUsers = () => {
     <>
       <PreLoader visibility={preLoaderVisibility} />
 
-      <style>{`
-        .manage-users-table thead,
-        .manage-users-table th {
-          position: static !important;
-        }
-      `}</style>
-
       <div className='manage-users-wrapper' style={{ padding: '24px' }}>
         <div className='bg-white rounded p-3 shadow-sm'>
           <div className='d-flex justify-content-between align-items-center mb-3'>
             <h5 className='mb-0'>Danh sách người dùng</h5>
           </div>
 
-          <div className='d-flex gap-3 mb-3'>
+          <div className='d-flex gap-3 mb-3' style={{ position: 'sticky', top: 0, zIndex: 1000, backgroundColor: 'white', padding: '10px 0' }}>
             <div className='flex-grow-1'>
               <input
                 type='text'
@@ -204,9 +197,9 @@ const ManageUsers = () => {
 
           <div className='table-responsive'>
             <table className='table table-borderless table-hover manage-users-table mb-0'>
-          <thead className='thead-light' style={{ position: 'static', top: 'auto', zIndex: 'auto' }}>
+          <thead className='thead-light' style={{ position: 'sticky', top: '60px', zIndex: 990 }}>
             <tr>
-              <th className='text-secondary text-left' scope='col' style={{ width: '120px', position: 'static' }}>
+              <th className='text-secondary text-left' scope='col' style={{ width: '120px' }}>
                 <button
                   className='btn btn-sm btn-outline-primary'
                   onClick={toggleSelectAll}
@@ -214,25 +207,25 @@ const ManageUsers = () => {
                   {selectedIds.size > 0 ? 'Bỏ chọn' : 'Chọn tất cả'}
                 </button>
               </th>
-              <th className='text-secondary text-left' scope='col' style={{ position: 'static' }}>
+              <th className='text-secondary text-left' scope='col'>
                 #
               </th>
-              <th className='text-secondary' scope='col' style={{ position: 'static' }}>
+              <th className='text-secondary' scope='col'>
                 Name
               </th>
-              <th className='text-secondary' scope='col' style={{ position: 'static' }}>
+              <th className='text-secondary' scope='col'>
                 Email
               </th>
-              <th className='text-secondary' scope='col' style={{ position: 'static' }}>
+              <th className='text-secondary' scope='col'>
                 Username
               </th>
-              <th className='text-secondary' scope='col' style={{ position: 'static' }}>
+              <th className='text-secondary' scope='col'>
                 Status
               </th>
-              <th className='text-secondary' scope='col' style={{ position: 'static' }}>
+              <th className='text-secondary' scope='col'>
                 Vai trò
               </th>
-              <th className='text-secondary' scope='col' style={{ position: 'static' }}>
+              <th className='text-secondary' scope='col'>
                 Action
               </th>
             </tr>

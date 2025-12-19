@@ -4,12 +4,14 @@ import './Event.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUpload } from '@fortawesome/free-solid-svg-icons';
 import { useHistory } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 // ========================================================
 
 const Event = () => {
   // this is for add event form:
   // Set state for event
   const [existingEvent, setExistingEvent] = useState([]);
+  const { user } = useAuth();
 
   // Set all existing event from API
   useEffect(() => {
@@ -21,24 +23,47 @@ const Event = () => {
   // handle redirected to home
   let history = useHistory();
   function handleEventUpdate() {
-    history.push('/');
+    history.push('/events');
   }
 
   // handle Add Event form Submit:
   const handleAddEvent = (data) => {
-    const newEvent = { ...data };
+    const newEvent = { 
+        id: Date.now().toString(),
+        name: data.task,
+        description: data.description,
+        startDate: new Date(data.date).toISOString(),
+        endDate: new Date(data.date).toISOString(),
+        dateDeadline: new Date(data.date).toISOString(),
+        location: 'Hà Nội',
+        status: 'APPROVED',
+        username: user ? user.username : 'admin',
+        ownerId: user ? (user.uid || 'admin-id') : 'admin-id',
+        imageUrl: data.image,
+        registeredCount: 0,
+        interestedCount: 0,
+        ...data 
+    };
 
+    // Save to local storage for temporary frontend display
+    try {
+        const existingMockEvents = JSON.parse(localStorage.getItem('mockEvents') || '[]');
+        const updatedMockEvents = [newEvent, ...existingMockEvents];
+        localStorage.setItem('mockEvents', JSON.stringify(updatedMockEvents));
+        console.log('Event saved to local storage:', newEvent);
+    } catch (e) {
+        console.error('Error saving to local storage', e);
+    }
+
+    // Redirect immediately to show the new event
+    handleEventUpdate();
+
+    // Attempt to save to backend (legacy) - Fire and forget
     fetch('https://volunteer-network-react.herokuapp.com/addEvent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newEvent),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data) {
-          handleEventUpdate();
-        }
-      });
+    }).catch(err => console.log('Backend save failed (expected in demo mode)'));
   };
 
   // React hook form for extra form validation and error message

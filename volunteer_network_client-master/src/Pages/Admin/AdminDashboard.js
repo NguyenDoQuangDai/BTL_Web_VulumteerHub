@@ -71,8 +71,11 @@ const AdminDashboard = () => {
             <img className='w-75 text-center' src={logo} alt='' />
           </Link>
         </div>
-        <div className='col-md-10 d-flex align-items-center'>
+        <div className='col-md-10 d-flex align-items-center justify-content-between'>
           <h5>Volunteer Register List</h5>
+          <Link to="/home" className="btn btn-outline-danger">
+            Close
+          </Link>
         </div>
       </div>
       <div className='row bg-white'>

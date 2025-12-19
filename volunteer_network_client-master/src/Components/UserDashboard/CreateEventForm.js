@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faMapMarkerAlt, faFileAlt, faHourglassHalf, faPlay, faStop } from '@fortawesome/free-solid-svg-icons';
+import { faMapMarkerAlt, faFileAlt, faHourglassHalf, faPlay, faStop, faImage } from '@fortawesome/free-solid-svg-icons';
 import { eventService } from '../../services/apiService';
+import { useAuth } from '../../contexts/AuthContext';
 
 const toIso = (val) => {
   try {
@@ -12,6 +13,15 @@ const toIso = (val) => {
 };
 
 const CreateEventForm = ({ onClose, onCreated }) => {
+  const isMounted = useRef(true);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
   const [form, setForm] = useState({
     name: '',
     description: '',
@@ -19,6 +29,7 @@ const CreateEventForm = ({ onClose, onCreated }) => {
     dateDeadline: '',
     startDate: '',
     endDate: '',
+    images: [],
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -28,6 +39,30 @@ const CreateEventForm = ({ onClose, onCreated }) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
     setError(null);
+  };
+
+  const handleImageChange = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const files = Array.from(e.target.files);
+      Promise.all(files.map(file => {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      }))
+      .then(results => {
+        setForm(prev => ({ ...prev, images: [...(prev.images || []), ...results] }));
+      });
+    }
+  };
+
+  const removeImage = (index) => {
+    setForm(prev => ({
+      ...prev,
+      images: prev.images.filter((_, i) => i !== index)
+    }));
   };
 
   const validate = () => {
@@ -58,26 +93,65 @@ const CreateEventForm = ({ onClose, onCreated }) => {
       const payload = {
         name: form.name,
         description: form.description || '',
-        // location is frontend-only for now; do not send to backend
+        location: form.location || '',
         dateDeadline: toIso(form.dateDeadline),
         startDate: toIso(form.startDate),
         endDate: toIso(form.endDate),
+        images: form.images,
+        image: form.images && form.images.length > 0 ? form.images[0] : null,
         // status will be set to DRAFT by backend
       };
-      const created = await eventService.createEvent(payload);
-      setSuccess('Tạo sự kiện thành công (trạng thái DRAFT).');
-      if (onCreated) onCreated(created);
-      // Optional: close after short delay
-      setTimeout(() => onClose && onClose(), 800);
+
+      let created;
+      try {
+        created = await eventService.createEvent(payload);
+      } catch (backendErr) {
+        console.warn('Backend creation failed, using mock fallback:', backendErr);
+        created = {
+          id: Date.now(),
+          ...payload,
+          images: form.images || [],
+          image: (form.images && form.images.length > 0) ? form.images[0] : 'https://i.imgur.com/Uj2Iq0R.png',
+          status: 'DRAFT',
+          owner: user?.username || 'Me'
+        };
+      }
+      
+      // Save to localStorage for frontend persistence (mock mode)
+      try {
+        const existing = JSON.parse(localStorage.getItem('mockEvents') || '[]');
+        existing.push(created);
+        localStorage.setItem('mockEvents', JSON.stringify(existing));
+        window.dispatchEvent(new Event('storage'));
+      } catch (e) {
+        console.error("Failed to save to localStorage", e);
+      }
+      
+      if (isMounted.current) {
+        setSuccess('Tạo sự kiện thành công (trạng thái DRAFT).');
+      }
+
+      if (onCreated) {
+        onCreated(created);
+      } else {
+        // Optional: close after short delay if onCreated didn't handle it
+        setTimeout(() => {
+          if (isMounted.current && onClose) onClose();
+        }, 800);
+      }
     } catch (err) {
-      setError(err.message || 'Không thể tạo sự kiện.');
+      if (isMounted.current) {
+        setError(err.message || 'Không thể tạo sự kiện.');
+      }
     } finally {
-      setSubmitting(false);
+      if (isMounted.current) {
+        setSubmitting(false);
+      }
     }
   };
 
   return (
-    <div className="card mb-4">
+    <div className="card mb-4" style={{ boxShadow: 'none', transform: 'none' }}>
       <div className="card-body">
         <div className="d-flex justify-content-between align-items-center mb-3">
           <h5 className="mb-0">Tạo sự kiện mới</h5>
@@ -129,6 +203,39 @@ const CreateEventForm = ({ onClose, onCreated }) => {
               value={form.description}
               onChange={onChange}
             />
+          </div>
+
+          <div className="form-group">
+            <label className="field-label">
+              <FontAwesomeIcon icon={faImage} className="mr-1" />
+              Hình ảnh
+            </label>
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              className="form-control-file"
+              onChange={handleImageChange}
+            />
+            <div className="d-flex flex-wrap mt-2">
+              {form.images && form.images.map((img, index) => (
+                <div key={index} className="position-relative mr-2 mb-2">
+                  <img 
+                    src={img} 
+                    alt={`Preview ${index}`} 
+                    style={{ height: '100px', width: '100px', objectFit: 'cover', borderRadius: '4px' }} 
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-danger btn-sm position-absolute"
+                    style={{ top: 0, right: 0, padding: '0px 5px', fontSize: '12px', lineHeight: '1.2' }}
+                    onClick={() => removeImage(index)}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="form-row">

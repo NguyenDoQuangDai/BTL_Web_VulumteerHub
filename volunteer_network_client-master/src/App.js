@@ -15,6 +15,8 @@ import AdminEvent from './Pages/Admin/AddEvent';
 import ManageUsersDashboard from './Pages/Admin/ManageUsersDashboard';
 import ManageEventsDashboard from './Pages/Admin/ManageEventsDashboard';
 import EventsPage from './Pages/Events/EventsPage';
+import EventChannelPage from './Pages/EventChannel/EventChannelPage';
+import Forum from './Components/Forum/Forum';
 import Unauthorized from './Components/Unauthorized/Unauthorized';
 import { AuthProvider } from './contexts/AuthContext';
 
@@ -42,6 +44,14 @@ function App() {
 
           <Route exact path='/events'>
             <EventsPage />
+          </Route>
+
+          <Route path='/event/:id'>
+            <EventChannelPage />
+          </Route>
+
+          <Route exact path='/forum'>
+            <Forum />
           </Route>
 
           <PrivateRoute exact path='/userDashboard'>

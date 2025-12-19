@@ -44,8 +44,8 @@ const Header = () => {
             <Link to='/events' className='nav-link' href='#'>
               Events
             </Link>
-            <Link to='/blog' className='nav-link' href='#'>
-              Blog
+            <Link to='/forum' className='nav-link' href='#'>
+              Forum
             </Link>
             {/* If user logged in show User Dashboard */}
             {isAuthenticated && (

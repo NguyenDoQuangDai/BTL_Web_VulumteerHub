@@ -10,9 +10,11 @@ import {
   faHourglassHalf,
   faUser,
   faFileAlt,
+  faImage,
 } from '@fortawesome/free-solid-svg-icons';
 import { createPortal } from 'react-dom';
 import EventChannelDashboard from '../EventChannel/EventChannelDashboard';
+import { useAuth } from '../../contexts/AuthContext';
 
 const statusClass = (status) => {
   switch (status) {
@@ -47,6 +49,20 @@ const formatDateTime = (iso) => {
 };
 
 const EventCard = ({ evt }) => {
+  const { user: authUser } = useAuth();
+  // Ensure user has a role for testing purposes (Default to 'Quản trị viên' if missing)
+  const user = authUser ? { ...authUser, role: authUser.role || 'Quản trị viên' } : null;
+
+  const isOwner = user && (
+    (evt.username && user.username === evt.username) ||
+    (evt.owner && user.username === evt.owner)
+  );
+  const isAdmin = user && (user.role === 'Quản trị viên' || user.role === 'ADMIN');
+  const isManager = user && (user.role === 'Quản lý sự kiện' || user.role === 'EVENT_MANAGER');
+
+  // Allow owner to edit, or admin to edit any event
+  const canEdit = isOwner || isAdmin;
+  const canDelete = isOwner || isAdmin;
 
   const readInterested = () => {
     try {
@@ -97,7 +113,32 @@ const EventCard = ({ evt }) => {
     dateDeadline: evt.dateDeadline || '',
     startDate: evt.startDate || '',
     endDate: evt.endDate || '',
+    images: evt.images || (evt.image || evt.imageUrl ? [evt.image || evt.imageUrl] : []),
   });
+
+  const handleImageChange = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const files = Array.from(e.target.files);
+      Promise.all(files.map(file => {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      }))
+      .then(results => {
+        setEditForm(prev => ({ ...prev, images: [...(prev.images || []), ...results] }));
+      });
+    }
+  };
+
+  const removeImage = (index) => {
+    setEditForm(prev => ({
+      ...prev,
+      images: prev.images.filter((_, i) => i !== index)
+    }));
+  };
 
 
 
@@ -135,7 +176,8 @@ const EventCard = ({ evt }) => {
       editForm.location !== (evt.location || '') ||
       editForm.dateDeadline !== (evt.dateDeadline || '') ||
       editForm.startDate !== (evt.startDate || '') ||
-      editForm.endDate !== (evt.endDate || '')
+      editForm.endDate !== (evt.endDate || '') ||
+      JSON.stringify(editForm.images) !== JSON.stringify(evt.images || (evt.image ? [evt.image] : []))
     );
   };
 
@@ -153,7 +195,22 @@ const EventCard = ({ evt }) => {
   };
 
   const handleSaveChanges = () => {
-    // TODO: integrate edit API
+    // Update mockEvents in localStorage
+    try {
+      const mockEvents = JSON.parse(localStorage.getItem('mockEvents') || '[]');
+      const index = mockEvents.findIndex(e => e.id === evt.id);
+      if (index !== -1) {
+        const updatedEvent = {
+          ...mockEvents[index],
+          ...editForm
+        };
+        mockEvents[index] = updatedEvent;
+        localStorage.setItem('mockEvents', JSON.stringify(mockEvents));
+        window.dispatchEvent(new Event('storage'));
+      }
+    } catch (e) {
+      console.error("Failed to update local event", e);
+    }
     setShowEditForm(false);
   };
 
@@ -206,26 +263,30 @@ const EventCard = ({ evt }) => {
             <span><strong>{adjustedInterestedCount}</strong> đã quan tâm</span>
           </div>
           <div className="d-flex justify-content-end align-items-center">
-            <button
-              type="button"
-              className="btn btn-sm btn-outline-secondary mr-2"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowEditForm(true);
-              }}
-            >
-              Sửa
-            </button>
-            <button
-              type="button"
-              className="btn btn-sm btn-outline-danger"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowDeleteConfirm(true);
-              }}
-            >
-              Xóa
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-secondary mr-2"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowEditForm(true);
+                }}
+              >
+                Sửa
+              </button>
+            )}
+            {canDelete && (
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-danger"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowDeleteConfirm(true);
+                }}
+              >
+                Xóa
+              </button>
+            )}
           </div>
         </div>
 
@@ -262,22 +323,15 @@ const EventCard = ({ evt }) => {
           </li>
           <li className="owner-line">
             <FontAwesomeIcon icon={faUser} className="mr-1 owner-icon" />
-            <strong>Owner:</strong> {evt.ownerId?.slice(0, 8)}…
+            <strong>Tạo bởi:</strong> {evt.username || evt.owner || evt.ownerId}
           </li>
         </ul>
 
-        <div className="mt-auto d-flex justify-content-start align-items-center">
-          <div className="d-flex align-items-center">
-            <Link
-              to={`/events/${evt.id}`}
-              className="btn btn-outline-primary btn-sm"
-              onClick={(e) => e.stopPropagation()}
-            >
-              Chi tiết
-            </Link>
+        <div className="mt-auto">
+          <div className="d-flex justify-content-between align-items-center w-100">
             <button
               type="button"
-              className={`btn btn-sm cancel-btn ml-2 ${registered ? '' : 'cancelled'} ${registerDisabled || cancelDisabled ? 'disabled-action' : ''}`}
+              className={`btn btn-sm cancel-btn ${registered ? '' : 'cancelled'} ${registerDisabled || cancelDisabled ? 'disabled-action' : ''}`}
               disabled={registerDisabled || cancelDisabled}
               onClick={(e) => {
                 e.stopPropagation();
@@ -296,7 +350,7 @@ const EventCard = ({ evt }) => {
             </button>
             <button
               type="button"
-              className={`btn btn-sm interest-btn ${interested ? 'interested' : ''} ml-2`}
+              className={`btn btn-sm interest-btn ${interested ? 'interested' : ''}`}
               onClick={(e) => {
                 e.stopPropagation();
                 toggleInterested();
@@ -388,12 +442,28 @@ const EventCard = ({ evt }) => {
                   className="form-control"
                   value={editForm.name}
                   onChange={handleEditFormChange}
+                  required
                 />
               </div>
 
               <div className="form-group">
-                <label className="field-label">
-                  <FontAwesomeIcon icon={faFileAlt} className="mr-2" />
+                <label className="field-label location-line">
+                  <FontAwesomeIcon icon={faMapMarkerAlt} className="mr-1 location-icon" />
+                  Địa điểm
+                </label>
+                <input
+                  type="text"
+                  name="location"
+                  className="form-control"
+                  placeholder="Ví dụ: Nhà văn hóa X, Quận 1"
+                  value={editForm.location}
+                  onChange={handleEditFormChange}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="field-label desc-line">
+                  <FontAwesomeIcon icon={faFileAlt} className="mr-1 desc-icon" />
                   Mô tả
                 </label>
                 <textarea
@@ -407,61 +477,83 @@ const EventCard = ({ evt }) => {
 
               <div className="form-group">
                 <label className="field-label">
-                  <FontAwesomeIcon icon={faMapMarkerAlt} className="mr-2" />
-                  Địa điểm
+                  <FontAwesomeIcon icon={faImage} className="mr-1" />
+                  Hình ảnh
                 </label>
                 <input
-                  type="text"
-                  name="location"
-                  className="form-control"
-                  value={editForm.location}
-                  onChange={handleEditFormChange}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="form-control-file"
+                  onChange={handleImageChange}
                 />
+                <div className="d-flex flex-wrap mt-2">
+                  {editForm.images && editForm.images.map((img, index) => (
+                    <div key={index} className="position-relative mr-2 mb-2">
+                      <img 
+                        src={img} 
+                        alt={`Preview ${index}`} 
+                        style={{ height: '100px', width: '100px', objectFit: 'cover', borderRadius: '4px' }} 
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-sm position-absolute"
+                        style={{ top: 0, right: 0, padding: '0px 5px', fontSize: '12px', lineHeight: '1.2' }}
+                        onClick={() => removeImage(index)}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              <div className="form-group">
-                <label className="field-label">
-                  <FontAwesomeIcon icon={faPlay} className="mr-2" />
-                  Ngày bắt đầu *
-                </label>
-                <input
-                  type="datetime-local"
-                  name="startDate"
-                  className="form-control"
-                  value={editForm.startDate ? editForm.startDate.slice(0, 16) : ''}
-                  onChange={handleEditFormChange}
-                />
+              <div className="form-row">
+                <div className="form-group col-md-4">
+                  <label className="field-label deadline-line">
+                    <FontAwesomeIcon icon={faHourglassHalf} className="mr-1 deadline-icon" />
+                    Hạn đăng ký *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    name="dateDeadline"
+                    className="form-control"
+                    value={editForm.dateDeadline ? editForm.dateDeadline.slice(0, 16) : ''}
+                    onChange={handleEditFormChange}
+                    required
+                  />
+                </div>
+                <div className="form-group col-md-4">
+                  <label className="field-label start-line">
+                    <FontAwesomeIcon icon={faPlay} className="mr-1 start-icon" />
+                    Bắt đầu *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    name="startDate"
+                    className="form-control"
+                    value={editForm.startDate ? editForm.startDate.slice(0, 16) : ''}
+                    onChange={handleEditFormChange}
+                    required
+                  />
+                </div>
+                <div className="form-group col-md-4">
+                  <label className="field-label end-line">
+                    <FontAwesomeIcon icon={faStop} className="mr-1 end-icon" />
+                    Kết thúc *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    name="endDate"
+                    className="form-control"
+                    value={editForm.endDate ? editForm.endDate.slice(0, 16) : ''}
+                    onChange={handleEditFormChange}
+                    required
+                  />
+                </div>
               </div>
 
-              <div className="form-group">
-                <label className="field-label">
-                  <FontAwesomeIcon icon={faStop} className="mr-2" />
-                  Ngày kết thúc *
-                </label>
-                <input
-                  type="datetime-local"
-                  name="endDate"
-                  className="form-control"
-                  value={editForm.endDate ? editForm.endDate.slice(0, 16) : ''}
-                  onChange={handleEditFormChange}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="field-label">
-                  <FontAwesomeIcon icon={faHourglassHalf} className="mr-2" />
-                  Hạn đăng ký *
-                </label>
-                <input
-                  type="datetime-local"
-                  name="dateDeadline"
-                  className="form-control"
-                  value={editForm.dateDeadline ? editForm.dateDeadline.slice(0, 16) : ''}
-                  onChange={handleEditFormChange}
-                />
-              </div>
-
-              <div className="text-right">
+              <div className="text-right mt-3">
                 <button
                   type="button"
                   className="btn btn-outline-secondary mr-2"

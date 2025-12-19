@@ -21,28 +21,13 @@ const Sidebar = () => {
           </Link>
         </li>
         <li>
-          <Link to='/admin/dashboard' className='text-dark'>
-            <FontAwesomeIcon icon={faUsers} /> <span>Volunteer List</span>
-          </Link>
-        </li>
-        <li>
           <Link to='/admin/events' className='text-dark'>
             <FontAwesomeIcon icon={faCalendarAlt} /> <span>Quản lý sự kiện</span>
           </Link>
         </li>
         <li>
-          <Link to='/admin/addEvent' className='text-dark'>
-            <FontAwesomeIcon icon={faPlus} /> <span>Add Event</span>
-          </Link>
-        </li>
-        <li>
           <Link to='/admin/users' className='text-dark'>
             <FontAwesomeIcon icon={faUsers} /> <span>Quản lý người dùng</span>
-          </Link>
-        </li>
-        <li>
-          <Link to='/' className='text-dark'>
-            <FontAwesomeIcon icon={faSignOutAlt} /> <span>Logout</span>
           </Link>
         </li>
       </ul>

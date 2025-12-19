@@ -144,18 +144,12 @@ const ManageEvents = () => {
 
   return (
     <div className='manage-events-wrapper' style={{ padding: '24px' }}>
-      <style>{`
-        .manage-events-table thead,
-        .manage-events-table th {
-          position: static !important;
-        }
-      `}</style>
       <div className='bg-white rounded p-3 shadow-sm'>
         <div className='d-flex justify-content-between align-items-center mb-3'>
           <h5 className='mb-0'>Danh sách sự kiện</h5>
         </div>
         
-        <div className='d-flex gap-3 mb-3'>
+        <div className='d-flex gap-3 mb-3' style={{ position: 'sticky', top: 0, zIndex: 1000, backgroundColor: 'white', padding: '10px 0' }}>
           <div className='flex-grow-1'>
             <input
               type='text'
@@ -183,7 +177,7 @@ const ManageEvents = () => {
         
         <div className='table-responsive'>
           <table className='table table-borderless table-hover manage-events-table mb-0'>
-            <thead className='thead-light'>
+            <thead className='thead-light' style={{ position: 'sticky', top: '60px', zIndex: 990 }}>
               <tr>
                 <th className='text-secondary text-left' scope='col' style={{ width: '120px' }}>
                   <button
