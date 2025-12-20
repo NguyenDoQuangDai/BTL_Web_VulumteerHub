@@ -34,6 +34,7 @@ export const API_ENDPOINTS = {
   USERS: {
     LIST: `${API_BASE_URL}/users`,
     GET: (id) => `${API_BASE_URL}/users/${id}`,
+    MYSELF: `${API_BASE_URL}/users/myself`,
     CREATE: `${API_BASE_URL}/users`,
     UPDATE: (id) => `${API_BASE_URL}/users/${id}`,
   },

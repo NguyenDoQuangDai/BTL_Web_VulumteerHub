@@ -209,6 +209,17 @@ export const userService = {
     return await apiRequest(API_ENDPOINTS.USERS.GET(id));
   },
 
+  getMyself: async () => {
+    return await apiRequest(API_ENDPOINTS.USERS.MYSELF);
+  },
+
+  updateUser: async (userId, userData) => {
+    return apiRequest(API_ENDPOINTS.USERS.UPDATE(userId), {
+      method: 'PATCH',
+      body: JSON.stringify(userData),
+    });
+  },
+
   // Create new user
   createUser: async (userData) => {
     return await apiRequest(API_ENDPOINTS.USERS.CREATE, {

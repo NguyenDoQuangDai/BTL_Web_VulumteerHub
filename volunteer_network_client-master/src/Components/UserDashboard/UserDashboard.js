@@ -24,25 +24,24 @@ const UserDashboard = () => {
 
   // Auth context
   const { user, isAuthenticated, updateUser } = useAuth();
-  const [currentUser, setCurrentUser] = useState(user);
+  const [currentUser, setCurrentUser] = useState(null);
 
   useEffect(() => {
-      if (user) {
-          setCurrentUser(user);
-          // Fetch latest user data
+      if (isAuthenticated) {
+          // Fetch current user data from /users/myself
           const fetchUserData = async () => {
               try {
-                  const userData = await userService.getUser(user.id);
-                  setCurrentUser(prev => ({ ...prev, ...userData }));
-                  // Optionally update global auth context if needed, but local state is safer for now
-                  // updateUser(userData); 
+                  const userData = await userService.getMyself();
+                  setCurrentUser(userData);
               } catch (e) {
-                  console.error("Failed to fetch latest user data", e);
+                  console.error("Failed to fetch user data", e);
+                  // Fallback to context user if API fails
+                  setCurrentUser(user);
               }
           };
           fetchUserData();
       }
-  }, [user]);
+  }, [isAuthenticated, user]);
 
   const handleEditClick = () => {
     setEditFirstname(currentUser.firstname || '');
@@ -72,15 +71,13 @@ const UserDashboard = () => {
 
         const updatedUser = await userService.updateUser(currentUser.id, updateData);
         
-        // Map backend response to frontend user object structure if needed
-        const userForContext = {
-            ...currentUser,
-            ...updatedUser,
-            fullName: `${updatedUser.firstname} ${updatedUser.lastname}`.trim()
-        };
-
-        updateUser(userForContext);
-        setCurrentUser(userForContext);
+        // Refresh user data after update
+        const refreshedUser = await userService.getMyself();
+        setCurrentUser(refreshedUser);
+        
+        // Update auth context if needed
+        updateUser(refreshedUser);
+        
         setShowEditProfile(false);
     } catch (err) {
         console.error("Failed to update profile", err);
@@ -117,7 +114,6 @@ const UserDashboard = () => {
       if (!currentUser || !currentUser.id) return;
       try {
         // Fetch events where ownerId matches current user
-        // Pass ownerId as the 6th argument (page, size, status, search, sort, ownerId)
         const response = await eventService.getEvents(0, 100, null, null, null, currentUser.id);
         
         let myEvents = [];
@@ -158,15 +154,13 @@ const UserDashboard = () => {
     );
   }
 
-  if (loading) {
+  if (loading || !currentUser) {
     return (
       <div className='container mt-5'>
         <PreLoader visibility="block" />
       </div>
     );
   }
-
-
 
   return (
     <div className='container mt-5'>
@@ -193,27 +187,23 @@ const UserDashboard = () => {
           />
           <div className="user-info">
             <h4 className="mb-1">
-              {currentUser.lastname && currentUser.firstname 
-                ? `${currentUser.lastname} ${currentUser.firstname}` 
-                : (currentUser.fullName || currentUser.username)}
+              {currentUser.firstname && currentUser.lastname 
+                ? `${currentUser.firstname} ${currentUser.lastname}` 
+                : currentUser.username}
             </h4>
-            <span className="user-username d-block mb-4">@{currentUser.username}</span>
+            <span className="user-username d-block mb-4 text-muted">ID: {currentUser.id}</span>
             
             <div className="row">
               <div className="col-md-6">
                 <div className="user-details-grid">
-                  {/* <div className="detail-item">
-                    <span className="detail-label">ID:</span>
-                    <span className="detail-value">#{currentUser.id || currentUser._id || '---'}</span>
-                  </div> */}
                   <div className="detail-item">
                     <span className="detail-label">Email:</span>
-                    <span className="detail-value">{currentUser.email || '---'}</span>
+                    <span className="detail-value">{currentUser.email || 'Chưa cập nhật'}</span>
                   </div>
                   <div className="detail-item">
                     <span className="detail-label">Ngày tham gia:</span>
                     <span className="detail-value">
-                      {currentUser.createdAt ? new Date(currentUser.createdAt).toLocaleDateString('vi-VN') : new Date().toLocaleDateString('vi-VN')}
+                      {currentUser.createdAt ? new Date(currentUser.createdAt).toLocaleDateString('vi-VN') : '---'}
                     </span>
                   </div>
                 </div>
@@ -223,16 +213,18 @@ const UserDashboard = () => {
                 <div className="user-details-grid">
                   <div className="detail-item">
                     <span className="detail-label">Trạng thái:</span>
-                    <span className="badge badge-success status-badge">Active</span>
+                    <span className={`badge ${currentUser.isActive ? 'badge-success' : 'badge-secondary'} status-badge`}>
+                      {currentUser.isActive ? 'Active' : 'Inactive'}
+                    </span>
                   </div>
                   <div className="detail-item">
                     <span className="detail-label">Vai trò:</span>
                     <span className={`badge ${
-                      (currentUser.role === 'ADMIN' || currentUser.role === 'Quản trị viên') 
+                      currentUser.role === 'ADMIN' 
                         ? 'badge-danger' 
                         : 'badge-primary'
                     } status-badge`}>
-                      {currentUser.role || 'Tình nguyện viên'}
+                      {currentUser.role === 'ADMIN' ? 'Quản trị viên' : 'Tình nguyện viên'}
                     </span>
                   </div>
                 </div>
@@ -297,8 +289,6 @@ const UserDashboard = () => {
         )}
       </div>
       
-      {/* Removed duplicate userRegistrations list */}
-      
       {/* Edit Profile Modal */}
       {showEditProfile && (
         <div className="modal-overlay" onClick={() => setShowEditProfile(false)}>
@@ -338,16 +328,6 @@ const UserDashboard = () => {
 
             <div className="form-row">
               <div className="form-group col-md-6">
-                <label>Họ</label>
-                <input 
-                  type="text" 
-                  className="form-control" 
-                  value={editLastname} 
-                  onChange={(e) => setEditLastname(e.target.value)}
-                  placeholder="Nhập họ"
-                />
-              </div>
-              <div className="form-group col-md-6">
                 <label>Tên</label>
                 <input 
                   type="text" 
@@ -355,6 +335,16 @@ const UserDashboard = () => {
                   value={editFirstname} 
                   onChange={(e) => setEditFirstname(e.target.value)}
                   placeholder="Nhập tên"
+                />
+              </div>
+              <div className="form-group col-md-6">
+                <label>Họ</label>
+                <input 
+                  type="text" 
+                  className="form-control" 
+                  value={editLastname} 
+                  onChange={(e) => setEditLastname(e.target.value)}
+                  placeholder="Nhập họ"
                 />
               </div>
             </div>
