@@ -9,6 +9,7 @@ import org.volumteerhub.dto.EventDto;
 import org.volumteerhub.common.exception.ResourceNotFoundException;
 import org.volumteerhub.common.exception.UnauthorizedAccessException;
 import org.volumteerhub.common.enumeration.EventStatus;
+import org.volumteerhub.common.enumeration.RegistrationStatus;
 import org.volumteerhub.model.Event;
 import org.volumteerhub.model.User;
 import org.volumteerhub.repository.EventRepository;
@@ -22,6 +23,7 @@ public class EventService {
 
     private final EventRepository eventRepository;
     private final UserService userService;
+    private final NotificationDispatcherService notificationDispatcherService;
 
     private void validateOwnership(Event event, User currentUser) {
         if (!event.getOwner().equals(currentUser)) {
@@ -41,11 +43,24 @@ public class EventService {
         dto.setId(event.getId());
         dto.setName(event.getName());
         dto.setDescription(event.getDescription());
+        dto.setLocation(event.getLocation());
         dto.setDateDeadline(event.getDateDeadline());
         dto.setStartDate(event.getStartDate());
         dto.setEndDate(event.getEndDate());
         dto.setStatus(event.getStatus());
         dto.setOwnerId(event.getOwner().getId());
+        dto.setUsername(event.getOwner().getUsername());
+        dto.setCreatedAt(event.getCreatedAt());
+
+        long count = 0;
+        if (event.getRegistrations() != null) {
+            count = event.getRegistrations().stream()
+                    .filter(r -> r.getStatus() == RegistrationStatus.APPROVED || 
+                                 r.getStatus() == RegistrationStatus.COMPLETED)
+                    .count();
+        }
+        dto.setRegisteredCount(count);
+
         return dto;
     }
 
@@ -57,6 +72,7 @@ public class EventService {
                 .owner(owner)
                 .name(dto.getName())
                 .description(dto.getDescription())
+                .location(dto.getLocation())
                 .dateDeadline(dto.getDateDeadline())
                 .startDate(dto.getStartDate())
                 .endDate(dto.getEndDate())
@@ -121,9 +137,11 @@ public class EventService {
 
         if (dto.getName() != null) event.setName(dto.getName());
         if (dto.getDescription() != null) event.setDescription(dto.getDescription());
+        if (dto.getLocation() != null) event.setLocation(dto.getLocation());
         if (dto.getDateDeadline() != null) event.setDateDeadline(dto.getDateDeadline());
         if (dto.getStartDate() != null) event.setStartDate(dto.getStartDate());
         if (dto.getEndDate() != null) event.setEndDate(dto.getEndDate());
+        if (dto.getStatus() != null) event.setStatus(dto.getStatus());
 
         return toDto(eventRepository.save(event));
     }
@@ -147,6 +165,10 @@ public class EventService {
             event.setStatus(EventStatus.PENDING);
             eventRepository.save(event);
         }
+
+        notificationDispatcherService.notifyAllAdmins(
+                "New event submit",
+                event.getName() + " by " + event.getOwner().getFirstname() + " " + event.getOwner().getLastname());
 
         return toDto(event);
     }

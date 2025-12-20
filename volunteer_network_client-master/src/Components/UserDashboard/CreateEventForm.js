@@ -96,45 +96,19 @@ const CreateEventForm = ({ onClose, onCreated }) => {
         location: form.location || '',
         dateDeadline: toIso(form.dateDeadline),
         startDate: toIso(form.startDate),
-        endDate: toIso(form.endDate),
-        images: form.images,
-        image: form.images && form.images.length > 0 ? form.images[0] : null,
-        // status will be set to DRAFT by backend
+        endDate: toIso(form.endDate)
+        // ownerId, status: backend tự xử lý
       };
 
-      let created;
-      try {
-        created = await eventService.createEvent(payload);
-      } catch (backendErr) {
-        console.warn('Backend creation failed, using mock fallback:', backendErr);
-        created = {
-          id: Date.now(),
-          ...payload,
-          images: form.images || [],
-          image: (form.images && form.images.length > 0) ? form.images[0] : 'https://i.imgur.com/Uj2Iq0R.png',
-          status: 'DRAFT',
-          owner: user?.username || 'Me'
-        };
-      }
-      
-      // Save to localStorage for frontend persistence (mock mode)
-      try {
-        const existing = JSON.parse(localStorage.getItem('mockEvents') || '[]');
-        existing.push(created);
-        localStorage.setItem('mockEvents', JSON.stringify(existing));
-        window.dispatchEvent(new Event('storage'));
-      } catch (e) {
-        console.error("Failed to save to localStorage", e);
-      }
-      
+      const created = await eventService.createEvent(payload);
+
       if (isMounted.current) {
-        setSuccess('Tạo sự kiện thành công (trạng thái DRAFT).');
+        setSuccess('Tạo sự kiện thành công.');
       }
 
       if (onCreated) {
         onCreated(created);
       } else {
-        // Optional: close after short delay if onCreated didn't handle it
         setTimeout(() => {
           if (isMounted.current && onClose) onClose();
         }, 800);

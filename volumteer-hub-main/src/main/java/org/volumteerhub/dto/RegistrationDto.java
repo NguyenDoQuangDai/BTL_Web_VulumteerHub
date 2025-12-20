@@ -21,6 +21,12 @@ public class RegistrationDto {
 
     private String username;
 
+    private String fullName;
+
+    private String role;
+
+    private java.time.Instant createdAt;
+
     @NotNull(groups = OnCreate.class)
     private UUID eventId;
 
