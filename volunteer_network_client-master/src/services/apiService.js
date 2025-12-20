@@ -59,7 +59,7 @@ export const authService = {
 // Event Service
 export const eventService = {
   // Get all events with pagination and filters
-  getEvents: async (page = 0, size = 20, status = null, search = null) => {
+  getEvents: async (page = 0, size = 20, status = null, search = null, sort = null, ownerId = null) => {
     try {
       let url = `${API_ENDPOINTS.EVENTS.LIST}?page=${page}&size=${size}`;
       
@@ -69,6 +69,14 @@ export const eventService = {
       
       if (search) {
         url += `&search=${encodeURIComponent(search)}`;
+      }
+
+      if (sort) {
+        url += `&sort=${sort}`;
+      }
+
+      if (ownerId) {
+        url += `&ownerId=${ownerId}`;
       }
       
       const response = await apiRequest(url);
@@ -140,18 +148,52 @@ export const registrationService = {
 
   // Register for an event
   registerForEvent: async (eventId, message = '') => {
-    return await apiRequest(API_ENDPOINTS.REGISTRATIONS.CREATE, {
+    return await apiRequest(API_ENDPOINTS.REGISTRATIONS.CREATE(eventId), {
       method: 'POST',
-      body: JSON.stringify({
-        eventId,
-        message,
-      }),
+      // Backend doesn't expect body for join, but we can send it if needed later. 
+      // Current controller signature is joinEvent(@PathVariable UUID eventId)
+      // so body is ignored.
     });
   },
 
   // Get registration by ID
   getRegistration: async (id) => {
     return await apiRequest(API_ENDPOINTS.REGISTRATIONS.GET(id));
+  },
+
+  // Get registrations by event ID
+  getRegistrationsByEvent: async (eventId, status = null) => {
+    let url = `${API_ENDPOINTS.REGISTRATIONS.LIST}?eventId=${eventId}`;
+    if (status) {
+      url += `&status=${status}`;
+    }
+    const response = await apiRequest(url);
+    
+    if (response._embedded && response._embedded.registrations) {
+      return response._embedded.registrations;
+    }
+    return [];
+  },
+
+  // Approve registration
+  approveRegistration: async (id) => {
+    return await apiRequest(API_ENDPOINTS.REGISTRATIONS.APPROVE(id), {
+      method: 'POST',
+    });
+  },
+
+  // Reject registration
+  rejectRegistration: async (id) => {
+    return await apiRequest(API_ENDPOINTS.REGISTRATIONS.REJECT(id), {
+      method: 'POST',
+    });
+  },
+
+  // Delete registration
+  deleteRegistration: async (id) => {
+    return await apiRequest(API_ENDPOINTS.REGISTRATIONS.DELETE(id), {
+      method: 'DELETE',
+    });
   },
 };
 
@@ -177,6 +219,14 @@ export const userService = {
         username: userData.username,
         password: userData.password
       }),
+    });
+  },
+
+  // Update user
+  updateUser: async (id, userData) => {
+    return await apiRequest(API_ENDPOINTS.USERS.UPDATE(id), {
+      method: 'PUT',
+      body: JSON.stringify(userData),
     });
   },
 };
@@ -238,7 +288,15 @@ export const adminService = {
   // Get all events (for admin dashboard)
   getAllEvents: async () => {
     try {
-      return await apiRequest(API_ENDPOINTS.ADMIN.GET_ALL_EVENTS);
+      // Use the general events endpoint which allows admins to see all events
+      // Request a large size to get all events since pagination isn't implemented in the admin UI yet
+      const response = await apiRequest(`${API_ENDPOINTS.EVENTS.LIST}?size=1000`);
+      
+      if (!response) return [];
+      if (response._embedded && response._embedded.events) {
+        return response._embedded.events;
+      }
+      return response.content || (Array.isArray(response) ? response : []);
     } catch (error) {
       if (error.message.includes('FORBIDDEN')) {
         throw new Error('Access denied. Admin privileges required.');
@@ -250,12 +308,82 @@ export const adminService = {
   // Get all registrations (for admin dashboard)
   getAllRegistrations: async () => {
     try {
-      return await apiRequest(API_ENDPOINTS.ADMIN.GET_ALL_REGISTRATIONS);
+      const response = await apiRequest(API_ENDPOINTS.ADMIN.GET_ALL_REGISTRATIONS);
+      if (response._embedded && response._embedded.registrations) {
+        return response._embedded.registrations;
+      }
+      return response.content || [];
     } catch (error) {
       if (error.message.includes('FORBIDDEN')) {
         throw new Error('Access denied. Admin privileges required.');
       }
       throw error;
     }
+  },
+};
+
+// Post Service
+export const postService = {
+  // Lấy tất cả bài viết (Global Forum)
+  getAllPosts: async (page = 0, size = 20) => {
+    return await apiRequest(`${API_ENDPOINTS.POSTS.LIST_ALL}?page=${page}&size=${size}&sort=createdAt,desc`);
+  },
+  // Lấy danh sách bài viết theo sự kiện
+  getPostsByEvent: async (eventId, page = 0, size = 20, type = null) => {
+    let url = `${API_ENDPOINTS.EVENTS.GET(eventId)}/posts?page=${page}&size=${size}`;
+    if (type) {
+        url += `&type=${type}`;
+    }
+    return await apiRequest(url);
+  },
+  // Tạo bài viết mới
+  createPost: async (eventId, postData) => {
+    const url = `${API_ENDPOINTS.EVENTS.GET(eventId)}/posts`;
+    return await apiRequest(url, {
+      method: 'POST',
+      body: JSON.stringify(postData),
+    });
+  },
+  // Sửa bài viết
+  updatePost: async (postId, postData) => {
+    return await apiRequest(API_ENDPOINTS.POSTS.UPDATE(postId), {
+      method: 'PATCH',
+      body: JSON.stringify(postData),
+    });
+  },
+  // Xóa bài viết
+  deletePost: async (postId) => {
+    return await apiRequest(API_ENDPOINTS.POSTS.DELETE(postId), {
+      method: 'DELETE',
+    });
+  },
+  // Thích bài viết
+  likePost: async (postId) => {
+    return await apiRequest(API_ENDPOINTS.POSTS.REACT(postId, 'LIKE'), {
+      method: 'POST',
+    });
+  },
+  // Bỏ thích bài viết
+  unlikePost: async (postId) => {
+    return await apiRequest(API_ENDPOINTS.POSTS.REACT(postId, 'NONE'), {
+      method: 'POST',
+    });
+  },
+  // Lấy danh sách bình luận
+  getComments: async (postId, page = 0, size = 20) => {
+    return await apiRequest(`${API_ENDPOINTS.COMMENTS.LIST_BY_POST(postId)}?page=${page}&size=${size}`);
+  },
+  // Tạo bình luận
+  createComment: async (postId, content, parentId = null) => {
+    return await apiRequest(API_ENDPOINTS.COMMENTS.CREATE(postId), {
+      method: 'POST',
+      body: JSON.stringify({ content, parentId }),
+    });
+  },
+  // Xóa bình luận
+  deleteComment: async (commentId) => {
+    return await apiRequest(API_ENDPOINTS.COMMENTS.DELETE(commentId), {
+      method: 'DELETE',
+    });
   },
 };

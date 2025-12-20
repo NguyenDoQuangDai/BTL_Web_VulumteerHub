@@ -6,15 +6,16 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.volumteerhub.common.enumeration.PostType;
+import org.volumteerhub.common.enumeration.ReactionType;
+import org.volumteerhub.common.exception.BadRequestException;
 import org.volumteerhub.common.exception.ResourceNotFoundException;
 import org.volumteerhub.dto.PostDto;
-import org.volumteerhub.model.Event;
-import org.volumteerhub.model.Post;
-import org.volumteerhub.model.PostMedia;
-import org.volumteerhub.model.User;
+import org.volumteerhub.model.*;
 import org.volumteerhub.repository.EventRepository;
 import org.volumteerhub.repository.PostMediaRepository;
 import org.volumteerhub.repository.PostRepository;
+import org.volumteerhub.repository.ReactionRepository;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -30,6 +31,7 @@ public class PostService {
     private final PostRepository postRepository;
     private final EventRepository eventRepository;
     private final PostMediaRepository postMediaRepository;
+    private final ReactionRepository reactionRepository;
     private final UserService userService;
     private final StorageService storageService;
 
@@ -40,14 +42,38 @@ public class PostService {
         dto.setContent(post.getContent());
         dto.setAuthorId(post.getUser().getId());
         dto.setAuthorName(post.getUser().getFirstname() + " " + post.getUser().getLastname());
+        dto.setAuthorRole(post.getUser().getRole().name());
+        dto.setType(post.getType());
         dto.setCreatedAt(post.getCreatedAt());
         dto.setUpdatedAt(post.getUpdatedAt());
+        dto.setPinned(post.isPinned());
+        dto.setCommentsCount(post.getComments() != null ? post.getComments().size() : 0);
+        
+        if (post.getEvent() != null) {
+            dto.setEventId(post.getEvent().getId());
+            dto.setEventName(post.getEvent().getName());
+        }
 
         if (post.getMedias() != null) {
             List<String> urls = post.getMedias().stream()
-                    .map(media -> "/uploads/" + post.getId() + "/" + media.getResourceId())
+                    .map(PostMedia::getPath)
                     .collect(Collectors.toList());
             dto.setMediaUrls(urls);
+        }
+
+        if (post.getPostReactions() != null) {
+            dto.setLikes(post.getPostReactions().size());
+            try {
+                User currentUser = userService.getCurrentAuthenticatedUser();
+                boolean isLiked = post.getPostReactions().stream()
+                        .anyMatch(r -> r.getUser().getId().equals(currentUser.getId()));
+                dto.setLiked(isLiked);
+            } catch (Exception e) {
+                dto.setLiked(false);
+            }
+        } else {
+            dto.setLikes(0);
+            dto.setLiked(false);
         }
 
         return dto;
@@ -55,57 +81,39 @@ public class PostService {
 
     // LIST (Pagination handled here)
     @Transactional(readOnly = true)
-    public Page<PostDto> listByEvent(UUID eventId, Pageable pageable) {
+    public Page<PostDto> listByEvent(UUID eventId, PostType type, Pageable pageable) {
         if (!eventRepository.existsById(eventId)) {
             throw new ResourceNotFoundException("Event not found with id: " + eventId);
         }
         // Map Page<Entity> to Page<Dto>
+        if (type != null) {
+            return postRepository.findByEventIdAndType(eventId, type, pageable).map(this::toDto);
+        }
         return postRepository.findByEventId(eventId, pageable).map(this::toDto);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<PostDto> listAll(Pageable pageable) {
+        return postRepository.findAll(pageable).map(this::toDto);
     }
 
     // CREATE
     @Transactional
     public PostDto create(UUID eventId, PostDto dto) {
         User currentUser = userService.getCurrentAuthenticatedUser();
-
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResourceNotFoundException("Event not found"));
 
-        // 1. Save the Post first to get an ID
         Post post = Post.builder()
                 .content(dto.getContent())
                 .user(currentUser)
                 .event(event)
+                .type(dto.getType() != null ? dto.getType() : PostType.DISCUSSION)
                 .build();
 
         post = postRepository.save(post);
 
-        // 2. Handle Media (Move from Temp -> Permanent)
-        if (dto.getMediaIds() != null && !dto.getMediaIds().isEmpty()) {
-            List<PostMedia> mediaList = new ArrayList<>();
-
-            for (UUID tempFileId : dto.getMediaIds()) {
-                try {
-                    // Move file on disk
-                    storageService.moveTempFileToPermanent(tempFileId, post.getId());
-
-                    // Create DB record
-                    PostMedia media = PostMedia.builder()
-                            .post(post)
-                            .resourceId(tempFileId) // The file keeps its UUID name
-                            .build();
-
-                    mediaList.add(media);
-                } catch (IOException e) {
-                    log.error("Failed to move media file {}", tempFileId, e);
-                    // Optional: Throw exception to rollback transaction
-                    throw new RuntimeException("Failed to attach media", e);
-                }
-            }
-            // Save all media records
-            postMediaRepository.saveAll(mediaList);
-            post.setMedias(mediaList); // Update reference for DTO conversion
-        }
+        handleMediaUploads(post, event.getId(), dto.getMediaFilenames());
 
         return toDto(post);
     }
@@ -126,9 +134,28 @@ public class PostService {
 
         User currentUser = userService.getCurrentAuthenticatedUser();
 
-        userService.validateOwnerOrAdmin(post.getUser(), currentUser);
+        // Handle Content Update
+        if (dto.getContent() != null) {
+            userService.validateOwnerOrAdmin(post.getUser(), currentUser);
+            post.setContent(dto.getContent());
+        }
 
-        post.setContent(dto.getContent());
+        // Handle Pinning
+        if (dto.getPinned() != null) {
+            boolean isEventOwner = post.getEvent().getOwner().getId().equals(currentUser.getId());
+            boolean isAdmin = userService.isCurrentUserAdmin();
+            
+            if (!isEventOwner && !isAdmin) {
+                throw new org.volumteerhub.common.exception.UnauthorizedAccessException("Only Event Owner or Admin can pin posts.");
+            }
+            post.setPinned(dto.getPinned());
+        }
+
+        // Handle Media
+        if (dto.getMediaFilenames() != null && !dto.getMediaFilenames().isEmpty()) {
+            userService.validateOwnerOrAdmin(post.getUser(), currentUser);
+            handleMediaUploads(post, post.getEvent().getId(), dto.getMediaFilenames());
+        }
 
         return toDto(postRepository.save(post));
     }
@@ -148,5 +175,117 @@ public class PostService {
         }
 
         postRepository.delete(post);
+    }
+
+    /**
+     * Extracted method to handle moving files and saving Media entities
+     */
+    private void handleMediaUploads(Post post, UUID eventId, List<String> tempFileNames) {
+        if (tempFileNames == null || tempFileNames.isEmpty()) return;
+
+        List<PostMedia> mediaList = new ArrayList<>();
+
+        for (String fileName : tempFileNames) {
+            try {
+                // 1. Extract the UUID from the filename (removing the extension)
+                // Example: "uuid.jpg" -> "uuid"
+                String uuidString = fileName.contains(".")
+                        ? fileName.substring(0, fileName.lastIndexOf("."))
+                        : fileName;
+
+                UUID tempFileId = UUID.fromString(uuidString);
+
+                // 2. Move file using your hierarchical structure: /uploads/{eventId}/{postId}/
+                // This preserves the extension as seen in StorageService.java
+                String path = storageService.moveTempFileToPermanent(fileName, eventId, post.getId());
+
+                // 3. Create DB record
+                PostMedia media = PostMedia.builder()
+                        .post(post)
+                        .resourceId(tempFileId)
+                        .path(path)
+                        .build();
+
+                mediaList.add(media);
+            } catch (IllegalArgumentException e) {
+                log.error("Invalid UUID format in filename: {}", fileName);
+                throw new BadRequestException("Invalid media ID format");
+            } catch (IOException e) {
+                log.error("Failed to move media file {}", fileName, e);
+                throw new RuntimeException("Failed to attach media", e);
+            }
+        }
+
+        postMediaRepository.saveAll(mediaList);
+
+        // Sync the post's media list for the DTO conversion
+        if (post.getMedias() == null) {
+            post.setMedias(mediaList);
+        } else {
+            post.getMedias().addAll(mediaList);
+        }
+    }
+
+
+    // REACTION
+    /**
+     * Applies a new reaction or updates an existing one for the current user.
+     */
+    @Transactional
+    public void react(UUID postId, ReactionType newReactionType) {
+        if (newReactionType == ReactionType.NONE) {
+            // Treat NONE as a request to delete the reaction
+            this.deleteReaction(postId);
+            return;
+        }
+
+        User currentUser = userService.getCurrentAuthenticatedUser();
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new ResourceNotFoundException("Post not found with id: " + postId));
+
+        // 1. Check for existing reaction
+        reactionRepository.findByPostIdAndUserId(postId, currentUser.getId())
+                .ifPresentOrElse(
+                        // 2. Update existing reaction
+                        reaction -> {
+                            reaction.setReactionType(newReactionType);
+                            reactionRepository.save(reaction);
+                        },
+                        // 3. Create new reaction
+                        () -> {
+                            PostReaction reaction = PostReaction.builder()
+                                    .post(post)
+                                    .user(currentUser)
+                                    .reactionType(newReactionType)
+                                    .build();
+                            reactionRepository.save(reaction);
+                        }
+                );
+    }
+
+    /**
+     * Gets the current user's reaction from a post.
+     */
+    public ReactionType getReaction(UUID postId) {
+        User currentUser = userService.getCurrentAuthenticatedUser();
+
+        postRepository.findById(postId)
+                .orElseThrow(() -> new ResourceNotFoundException("Post not found with id: " + postId));
+
+        return reactionRepository.findByPostIdAndUserId(postId, currentUser.getId())
+                .map(PostReaction::getReactionType)
+                .orElse(ReactionType.NONE);
+    }
+
+    /**
+     * Removes the current user's reaction from a post.
+     */
+    @Transactional
+    public void deleteReaction(UUID postId) {
+        User currentUser = userService.getCurrentAuthenticatedUser();
+
+        reactionRepository.findByPostIdAndUserId(postId, currentUser.getId())
+                .ifPresent(reactionRepository::delete);
+
     }
 }

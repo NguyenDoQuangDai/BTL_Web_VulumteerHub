@@ -38,6 +38,9 @@ public class Event {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
+    @Column(name = "location")
+    private String location;
+
     @Column(nullable = false, name = "date_deadline")
     private Instant dateDeadline;
 

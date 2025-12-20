@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useHistory } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faHeart as faHeartSolid } from '@fortawesome/free-solid-svg-icons';
 import { faHeart as faHeartRegular } from '@fortawesome/free-regular-svg-icons';
@@ -13,8 +13,8 @@ import {
   faImage,
 } from '@fortawesome/free-solid-svg-icons';
 import { createPortal } from 'react-dom';
-import EventChannelDashboard from '../EventChannel/EventChannelDashboard';
 import { useAuth } from '../../contexts/AuthContext';
+import { registrationService, eventService } from '../../services/apiService';
 
 const statusClass = (status) => {
   switch (status) {
@@ -49,19 +49,22 @@ const formatDateTime = (iso) => {
 };
 
 const EventCard = ({ evt }) => {
+  const history = useHistory();
   const { user: authUser } = useAuth();
   // Ensure user has a role for testing purposes (Default to 'Quản trị viên' if missing)
   const user = authUser ? { ...authUser, role: authUser.role || 'Quản trị viên' } : null;
 
   const isOwner = user && (
     (evt.username && user.username === evt.username) ||
-    (evt.owner && user.username === evt.owner)
+    (evt.owner && user.username === evt.owner) ||
+    (evt.ownerId && user.id === evt.ownerId)
   );
   const isAdmin = user && (user.role === 'Quản trị viên' || user.role === 'ADMIN');
   const isManager = user && (user.role === 'Quản lý sự kiện' || user.role === 'EVENT_MANAGER');
 
-  // Allow owner to edit, or admin to edit any event
-  const canEdit = isOwner || isAdmin;
+  // Edit: Only owner can edit
+  // Delete: Owner or Admin can delete
+  const canEdit = isOwner;
   const canDelete = isOwner || isAdmin;
 
   const readInterested = () => {
@@ -95,17 +98,17 @@ const EventCard = ({ evt }) => {
     } catch {}
   };
 
-
-
   const [interested, setInterested] = useState(() => readInterested().has(evt.id));
-  const [registered, setRegistered] = useState(() => readRegistered().has(evt.id));
+  const [registered, setRegistered] = useState(false);
+  const [registrationId, setRegistrationId] = useState(null);
+  const [registrationStatus, setRegistrationStatus] = useState(null);
+  const [loadingReg, setLoadingReg] = useState(false);
+
   const initialInterestedRef = useRef(interested);
-  const initialRegisteredRef = useRef(registered);
   const [showConfirm, setShowConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
-  const [showChannel, setShowChannel] = useState(false);
   const [editForm, setEditForm] = useState({
     name: evt.name || '',
     description: evt.description || '',
@@ -115,6 +118,71 @@ const EventCard = ({ evt }) => {
     endDate: evt.endDate || '',
     images: evt.images || (evt.image || evt.imageUrl ? [evt.image || evt.imageUrl] : []),
   });
+
+  useEffect(() => {
+      const checkRegistration = async () => {
+          if (!user) return;
+          try {
+              const regs = await registrationService.getUserRegistrations();
+              let myRegs = [];
+              if (regs._embedded && regs._embedded.registrations) {
+                  myRegs = regs._embedded.registrations;
+              } else if (regs.content) {
+                  myRegs = regs.content;
+              }
+              
+              const myReg = myRegs.find(r => r.eventId === evt.id);
+              if (myReg) {
+                  setRegistered(true);
+                  setRegistrationId(myReg.id);
+                  setRegistrationStatus(myReg.status);
+              } else {
+                  setRegistered(false);
+                  setRegistrationId(null);
+                  setRegistrationStatus(null);
+              }
+          } catch (e) {
+              console.error("Failed to check registration", e);
+          }
+      };
+      checkRegistration();
+  }, [evt.id, user]);
+
+  const handleRegister = async (e) => {
+    e.stopPropagation();
+    if (registered) {
+      setShowConfirm(true);
+    } else {
+      try {
+          setLoadingReg(true);
+          const reg = await registrationService.registerForEvent(evt.id);
+          setRegistered(true);
+          setRegistrationId(reg.id);
+          setRegistrationStatus('PENDING');
+      } catch (e) {
+          alert("Failed to register: " + e.message);
+      } finally {
+          setLoadingReg(false);
+      }
+    }
+  };
+
+  const confirmUnregister = async () => {
+    try {
+        setLoadingReg(true);
+        if (registrationId) {
+            await registrationService.deleteRegistration(registrationId);
+            setRegistered(false);
+            setRegistrationId(null);
+            setRegistrationStatus(null);
+            setShowConfirm(false);
+        }
+    } catch (e) {
+        alert("Failed to unregister: " + e.message);
+    } finally {
+        setLoadingReg(false);
+    }
+  };
 
   const handleImageChange = (e) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -194,24 +262,23 @@ const EventCard = ({ evt }) => {
     }
   };
 
-  const handleSaveChanges = () => {
-    // Update mockEvents in localStorage
+  const handleSaveChanges = async () => {
     try {
-      const mockEvents = JSON.parse(localStorage.getItem('mockEvents') || '[]');
-      const index = mockEvents.findIndex(e => e.id === evt.id);
-      if (index !== -1) {
-        const updatedEvent = {
-          ...mockEvents[index],
-          ...editForm
-        };
-        mockEvents[index] = updatedEvent;
-        localStorage.setItem('mockEvents', JSON.stringify(mockEvents));
-        window.dispatchEvent(new Event('storage'));
-      }
+      await import('../../services/apiService').then(({ eventService }) =>
+        eventService.updateEvent(evt.id, {
+          name: editForm.name,
+          description: editForm.description,
+          location: editForm.location,
+          dateDeadline: new Date(editForm.dateDeadline).toISOString(),
+          startDate: new Date(editForm.startDate).toISOString(),
+          endDate: new Date(editForm.endDate).toISOString(),
+        })
+      );
+      setShowEditForm(false);
+      window.location.reload(); // reload để cập nhật danh sách
     } catch (e) {
-      console.error("Failed to update local event", e);
+      alert('Không thể cập nhật sự kiện: ' + (e.message || e));
     }
-    setShowEditForm(false);
   };
 
   useEffect(() => {
@@ -244,10 +311,7 @@ const EventCard = ({ evt }) => {
     evt.interestedCount ?? evt.followerCount ?? evt.followCount ?? evt.likeCount ?? 0
   );
 
-  const adjustedRegisteredCount = Math.max(
-    0,
-    baseRegisteredCount + (registered && !initialRegisteredRef.current ? 1 : 0) + (!registered && initialRegisteredRef.current ? -1 : 0)
-  );
+  const adjustedRegisteredCount = baseRegisteredCount;
   const adjustedInterestedCount = Math.max(
     0,
     baseInterestedCount + (interested && !initialInterestedRef.current ? 1 : 0) + (!interested && initialInterestedRef.current ? -1 : 0)
@@ -255,10 +319,11 @@ const EventCard = ({ evt }) => {
 
   return (
     <>
-    <div className="card h-100 event-card" onClick={() => setShowChannel(true)} style={{ cursor: 'pointer' }}>
+    <div className="card h-100 event-card" onClick={() => history.push(`/event/${evt.id}`)} style={{ cursor: 'pointer' }}>
       <div className="card-body d-flex flex-column">
         <div className="d-flex justify-content-between align-items-start mb-2">
           <div className="d-flex flex-column text-muted small">
+            <span className="mb-1">Đã tạo: {formatDateTime(evt.createdAt || evt.createdDate)}</span>
             <span className="mr-3"><strong>{adjustedRegisteredCount}</strong> đã tham gia</span>
           </div>
           <div className="d-flex justify-content-end align-items-center">
@@ -331,22 +396,19 @@ const EventCard = ({ evt }) => {
           <div className="d-flex justify-content-center align-items-center w-100">
             <button
               type="button"
-              className={`btn btn-sm cancel-btn ${registered ? '' : 'cancelled'} ${registerDisabled || cancelDisabled ? 'disabled-action' : ''}`}
-              disabled={registerDisabled || cancelDisabled}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (registerDisabled || cancelDisabled) return;
-                if (registered) {
-                  setShowConfirm(true);
-                } else {
-                  const s = readRegistered();
-                  s.add(evt.id);
-                  writeRegistered(s);
-                  setRegistered(true);
-                }
-              }}
+              className={`btn btn-sm w-100 ${
+                registrationStatus === 'REJECTED' ? 'btn-secondary' :
+                registered ? 'btn-outline-danger' : 
+                (evt.status !== 'APPROVED') ? 'btn-secondary' : 'btn-primary'
+              }`}
+              onClick={handleRegister}
+              disabled={loadingReg || registrationStatus === 'REJECTED' || (!registered && evt.status !== 'APPROVED')}
             >
-              {registered ? 'Hủy đăng ký' : 'Đăng ký'}
+              {loadingReg ? 'Đang xử lý...' : 
+               registrationStatus === 'REJECTED' ? 'Đã bị từ chối' :
+               (registered ? 'Hủy đăng ký' : 
+                (evt.status !== 'APPROVED' ? 'Không thể đăng ký' : 'Đăng ký tham gia')
+               )}
             </button>
           </div>
         </div>
@@ -366,13 +428,7 @@ const EventCard = ({ evt }) => {
               <button className="btn btn-light" onClick={() => setShowConfirm(false)}>Không</button>
               <button
                 className="btn btn-danger"
-                onClick={() => {
-                  const s = readRegistered();
-                  s.delete(evt.id);
-                  writeRegistered(s);
-                  setRegistered(false);
-                  setShowConfirm(false);
-                }}
+                onClick={confirmUnregister}
               >
                 Có
               </button>
@@ -573,9 +629,16 @@ const EventCard = ({ evt }) => {
               <button className="btn btn-light" onClick={() => setShowDeleteConfirm(false)}>Giữ</button>
               <button
                 className="btn btn-danger"
-                onClick={() => {
-                  // TODO: integrate delete API
-                  setShowDeleteConfirm(false);
+                onClick={async () => {
+                  try {
+                    await import('../../services/apiService').then(({ eventService }) =>
+                      eventService.deleteEvent(evt.id)
+                    );
+                    setShowDeleteConfirm(false);
+                    window.location.reload();
+                  } catch (e) {
+                    alert('Không thể xóa sự kiện: ' + (e.message || e));
+                  }
                 }}
               >
                 Xóa
@@ -586,14 +649,6 @@ const EventCard = ({ evt }) => {
         document.body
       )}
     </div>
-
-    {showChannel && createPortal(
-      <EventChannelDashboard 
-        event={evt} 
-        onClose={() => setShowChannel(false)} 
-      />,
-      document.body
-    )}
     </>
   );
 };

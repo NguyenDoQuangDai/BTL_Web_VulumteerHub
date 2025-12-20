@@ -1,39 +1,67 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faTrash, faCheck, faTimes, faTrashAlt } from '@fortawesome/free-solid-svg-icons';
+import { 
+  faTrash, 
+  faCheck, 
+  faTimes, 
+  faTrashAlt, 
+  faFileExport,
+  faSearch,
+  faFileCsv,
+  faFileCode,
+  faDownload,
+  faSync
+} from '@fortawesome/free-solid-svg-icons';
+import { adminService, eventService } from '../../services/apiService';
+import './ManageEvents.css';
 
 const ManageEvents = () => {
-  const sampleEvents = [
-    { _id: 'e1', name: 'Hiến máu nhân đạo', createdBy: 'Nguyễn Văn A', date: '2025-01-12', location: 'Hà Nội', status: 'DRAFT', participants: 42, slots: 80 },
-    { _id: 'e2', name: 'Dọn rác bãi biển', createdBy: 'Trần Thị B', date: '2025-02-03', location: 'Đà Nẵng', status: 'PENDING', participants: 25, slots: 50 },
-    { _id: 'e3', name: 'Trồng cây phủ xanh', createdBy: 'Phạm Văn C', date: '2025-02-20', location: 'TP.HCM', status: 'APPROVED', participants: 60, slots: 100 },
-    { _id: 'e4', name: 'Gây quỹ từ thiện', createdBy: 'Lê Thị D', date: '2025-03-05', location: 'Huế', status: 'COMPLETED', participants: 120, slots: 120 },
-    { _id: 'e5', name: 'Hỗ trợ vùng lũ', createdBy: 'Hoàng Văn E', date: '2025-01-28', location: 'Quảng Trị', status: 'REJECTED', participants: 18, slots: 40 },
-    { _id: 'e6', name: 'Tư vấn nghề nghiệp', createdBy: 'Vũ Thị F', date: '2025-02-15', location: 'Hải Phòng', status: 'PENDING', participants: 35, slots: 60 },
-    { _id: 'e7', name: 'Dạy học miền núi', createdBy: 'Đỗ Văn G', date: '2025-03-10', location: 'Cao Bằng', status: 'DRAFT', participants: 12, slots: 25 },
-    { _id: 'e8', name: 'Chăm sóc thú cưng', createdBy: 'Phan Thị H', date: '2025-01-22', location: 'Cần Thơ', status: 'COMPLETED', participants: 40, slots: 40 },
-    { _id: 'e9', name: 'Tiếp sức mùa thi', createdBy: 'Bùi Văn I', date: '2025-06-01', location: 'Hà Nội', status: 'PENDING', participants: 0, slots: 200 },
-    { _id: 'e10', name: 'Hỗ trợ bệnh viện', createdBy: 'Đặng Thị K', date: '2025-04-18', location: 'TP.HCM', status: 'APPROVED', participants: 55, slots: 90 },
-  ];
-
   const statusClass = (status) => {
     switch (status) {
       case 'APPROVED':
-        return 'badge badge-success';
+        return 'status-badge approved';
       case 'PENDING':
-        return 'badge badge-warning';
+        return 'status-badge pending';
       case 'REJECTED':
-        return 'badge badge-danger';
+        return 'status-badge rejected';
       case 'COMPLETED':
-        return 'badge badge-secondary';
+        return 'status-badge completed';
       case 'DRAFT':
       default:
-        return 'badge badge-info';
+        return 'status-badge draft';
     }
   };
 
-  const [eventList, setEventList] = useState(sampleEvents);
+  const [eventList, setEventList] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    loadEvents();
+  }, []);
+
+  const loadEvents = async () => {
+    try {
+      setLoading(true);
+      const events = await adminService.getAllEvents();
+      console.log("Loaded events:", events);
+      const mappedEvents = events.map(event => ({
+        _id: event.id,
+        name: event.name,
+        createdBy: event.username || 'Unknown',
+        date: event.createdAt || event.startDate, // Use createdAt for "Ngày tạo"
+        location: event.location,
+        status: event.status,
+        participants: event.registeredCount || 0,
+        slots: 100 // Default slots as it's not in DTO yet
+      }));
+      setEventList(mappedEvents);
+    } catch (error) {
+      console.error("Failed to load events", error);
+    } finally {
+      setLoading(false);
+    }
+  };
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -49,9 +77,12 @@ const ManageEvents = () => {
   };
 
   const filteredEvents = eventList.filter((e) => {
+    const name = e.name || '';
+    const location = e.location || '';
+    
     const matchesSearch = searchText === '' || 
-      e.name.toLowerCase().includes(searchText.toLowerCase()) ||
-      e.location.toLowerCase().includes(searchText.toLowerCase());
+      name.toLowerCase().includes(searchText.toLowerCase()) ||
+      location.toLowerCase().includes(searchText.toLowerCase());
     const matchesStatus = statusFilter === '' || e.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -64,45 +95,82 @@ const ManageEvents = () => {
     });
   };
 
-  const approveEvent = (_id) => {
-    setEventList((list) => list.map((e) => (e._id === _id ? { ...e, status: 'APPROVED' } : e)));
+  const approveEvent = async (_id) => {
+    try {
+      await adminService.approveEvent(_id);
+      // Reload events to get the updated status from server
+      loadEvents();
+    } catch (error) {
+      console.error("Failed to approve event", error);
+      alert("Failed to approve event");
+    }
   };
 
-  const rejectEvent = (_id) => {
-    setEventList((list) => list.map((e) => (e._id === _id ? { ...e, status: 'REJECTED' } : e)));
+  const rejectEvent = async (_id) => {
+    try {
+      await adminService.rejectEvent(_id);
+      // Reload events to get the updated status from server
+      loadEvents();
+    } catch (error) {
+      console.error("Failed to reject event", error);
+      alert("Failed to reject event");
+    }
   };
 
-  const deleteEvent = (_id) => {
-    setEventList((list) => list.filter((e) => e._id !== _id));
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.delete(_id);
-      return next;
-    });
+  const deleteEvent = async (_id) => {
+    if (!window.confirm("Are you sure you want to delete this event?")) return;
+    try {
+      await eventService.deleteEvent(_id);
+      setEventList((list) => list.filter((e) => e._id !== _id));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(_id);
+        return next;
+      });
+    } catch (error) {
+      console.error("Failed to delete event", error);
+      alert("Failed to delete event");
+    }
   };
 
-  const bulkApprove = () => {
-    setEventList((list) => list.map((e) => {
-      if (selectedIds.has(e._id) && !['APPROVED', 'COMPLETED', 'REJECTED'].includes(e.status)) {
-        return { ...e, status: 'APPROVED' };
+  const bulkApprove = async () => {
+    const ids = Array.from(selectedIds);
+    for (const id of ids) {
+      try {
+        await adminService.approveEvent(id);
+      } catch (error) {
+        console.error(`Failed to approve event ${id}`, error);
       }
-      return e;
-    }));
+    }
+    loadEvents();
     setSelectedIds(new Set());
   };
 
-  const bulkReject = () => {
-    setEventList((list) => list.map((e) => {
-      if (selectedIds.has(e._id) && !['APPROVED', 'COMPLETED', 'REJECTED'].includes(e.status)) {
-        return { ...e, status: 'REJECTED' };
+  const bulkReject = async () => {
+    const ids = Array.from(selectedIds);
+    for (const id of ids) {
+      try {
+        await adminService.rejectEvent(id);
+      } catch (error) {
+        console.error(`Failed to reject event ${id}`, error);
       }
-      return e;
-    }));
+    }
+    loadEvents();
     setSelectedIds(new Set());
   };
 
-  const bulkDelete = () => {
-    setEventList((list) => list.filter((e) => !selectedIds.has(e._id)));
+  const bulkDelete = async () => {
+    if (!window.confirm(`Are you sure you want to delete ${selectedIds.size} events?`)) return;
+    
+    const ids = Array.from(selectedIds);
+    for (const id of ids) {
+      try {
+        await eventService.deleteEvent(id);
+      } catch (error) {
+        console.error(`Failed to delete event ${id}`, error);
+      }
+    }
+    loadEvents();
     setSelectedIds(new Set());
   };
 
@@ -142,22 +210,50 @@ const ManageEvents = () => {
     setShowExportDialog(false);
   };
 
+  if (loading) {
+    return (
+      <div className="text-center my-5">
+        <div className="spinner-border text-primary" role="status">
+          <span className="sr-only">Loading...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className='manage-events-wrapper' style={{ padding: '24px' }}>
-      <div className='bg-white rounded p-3 shadow-sm'>
-        <div className='d-flex justify-content-between align-items-center mb-3'>
-          <h5 className='mb-0'>Danh sách sự kiện</h5>
+    <div className='manage-events-wrapper'>
+      <div className='manage-events-card'>
+        <div className='manage-events-header'>
+          <div>
+            <h5 className='mb-1 font-weight-bold'>Danh sách sự kiện</h5>
+            <p className='text-muted mb-0 small'>Quản lý, duyệt và theo dõi các sự kiện tình nguyện</p>
+          </div>
+          <div className='d-flex align-items-center'>
+            <div className='text-muted font-weight-bold mr-3'>
+              Tổng số: {filteredEvents.length}
+            </div>
+            <button className='btn btn-outline-primary btn-sm' onClick={loadEvents} title="Làm mới dữ liệu">
+              <FontAwesomeIcon icon={faSync} />
+            </button>
+          </div>
         </div>
         
-        <div className='d-flex gap-3 mb-3' style={{ position: 'sticky', top: 0, zIndex: 1000, backgroundColor: 'white', padding: '10px 0' }}>
+        <div className='manage-events-filters'>
           <div className='flex-grow-1'>
-            <input
-              type='text'
-              className='form-control'
-              placeholder='Tìm kiếm theo tên sự kiện hoặc địa điểm...'
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-            />
+            <div className="input-group">
+              <div className="input-group-prepend">
+                <span className="input-group-text bg-white border-right-0">
+                  <FontAwesomeIcon icon={faSearch} className="text-muted" />
+                </span>
+              </div>
+              <input
+                type='text'
+                className='form-control border-left-0'
+                placeholder='Tìm kiếm theo tên sự kiện hoặc địa điểm...'
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+              />
+            </div>
           </div>
           <div style={{ minWidth: '200px' }}>
             <select
@@ -176,72 +272,98 @@ const ManageEvents = () => {
         </div>
         
         <div className='table-responsive'>
-          <table className='table table-borderless table-hover manage-events-table mb-0'>
-            <thead className='thead-light' style={{ position: 'sticky', top: '60px', zIndex: 990 }}>
+          <table className='table table-hover manage-events-table mb-0'>
+            <thead>
               <tr>
-                <th className='text-secondary text-left' scope='col' style={{ width: '120px' }}>
-                  <button
-                    className='btn btn-sm btn-outline-primary'
-                    onClick={toggleSelectAll}
-                  >
-                    {selectedIds.size > 0 ? 'Bỏ chọn' : 'Chọn tất cả'}
-                  </button>
+                <th scope='col' style={{ width: '50px' }}>
+                  <div className="custom-control custom-checkbox">
+                    <input
+                      type="checkbox"
+                      className="custom-control-input"
+                      id="selectAllEvents"
+                      onChange={toggleSelectAll}
+                      checked={selectedIds.size > 0 && selectedIds.size === filteredEvents.length}
+                    />
+                    <label className="custom-control-label" htmlFor="selectAllEvents"></label>
+                  </div>
                 </th>
-                <th className='text-secondary text-left' scope='col' style={{ width: '50px' }}>#</th>
-                <th className='text-secondary' scope='col'>Tên sự kiện</th>
-                <th className='text-secondary' scope='col'>Tạo bởi</th>
-                <th className='text-secondary' scope='col'>Ngày tạo</th>
-                <th className='text-secondary' scope='col'>Địa điểm</th>
-                <th className='text-secondary' scope='col'>Trạng thái</th>
-                <th className='text-secondary text-right' scope='col' style={{ paddingRight: '16px' }}>Action</th>
+                <th scope='col' style={{ width: '50px' }}>#</th>
+                <th scope='col'>Tên sự kiện</th>
+                <th scope='col'>Tạo bởi</th>
+                <th scope='col'>Ngày tạo</th>
+                <th scope='col'>Địa điểm</th>
+                <th scope='col'>Trạng thái</th>
+                <th scope='col' className='text-right'>Hành động</th>
               </tr>
             </thead>
             <tbody>
-              {filteredEvents.map((evt, idx) => (
-                <tr key={evt._id}>
-                  <td>
-                    <input
-                      type='checkbox'
-                      checked={selectedIds.has(evt._id)}
-                      onChange={() => toggleSelect(evt._id)}
-                      style={{ width: '20px', height: '20px' }}
-                    />
-                  </td>
-                  <td>{idx + 1}</td>
-                  <td>{evt.name}</td>
-                  <td>{evt.createdBy}</td>
-                  <td>{evt.date}</td>
-                  <td>{evt.location}</td>
-                  <td>
-                    <span className={statusClass(evt.status)}>
-                      {evt.status}
-                    </span>
-                  </td>
-                  <td className='text-right' style={{ paddingRight: '16px' }}>
-                    {!['APPROVED', 'COMPLETED', 'REJECTED'].includes(evt.status) && (
-                      <>
-                        <button
-                          className='btn btn-outline-success btn-sm mr-2'
-                          onClick={() => approveEvent(evt._id)}
-                          title='Duyệt sự kiện'
-                        >
-                          <FontAwesomeIcon icon={faCheck} className="mr-1" /> Duyệt
-                        </button>
-                        <button
-                          className='btn btn-outline-warning btn-sm mr-2'
-                          onClick={() => rejectEvent(evt._id)}
-                          title='Từ chối sự kiện'
-                        >
-                          <FontAwesomeIcon icon={faTimes} className="mr-1" /> Từ chối
-                        </button>
-                      </>
-                    )}
-                    <button className='btn btn-outline-danger btn-sm' onClick={() => deleteEvent(evt._id)}>
-                      <FontAwesomeIcon icon={faTrashAlt} className="mr-1" /> Xóa
-                    </button>
+              {filteredEvents.length === 0 ? (
+                <tr>
+                  <td colSpan="8" className="text-center py-5">
+                    <div className="text-muted">
+                      <FontAwesomeIcon icon={faSearch} size="3x" className="mb-3 opacity-50" />
+                      <p>Không tìm thấy sự kiện nào phù hợp.</p>
+                    </div>
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredEvents.map((evt, idx) => (
+                  <tr key={evt._id}>
+                    <td>
+                      <div className="custom-control custom-checkbox">
+                        <input
+                          type="checkbox"
+                          className="custom-control-input"
+                          id={`event-${evt._id}`}
+                          checked={selectedIds.has(evt._id)}
+                          onChange={() => toggleSelect(evt._id)}
+                        />
+                        <label className="custom-control-label" htmlFor={`event-${evt._id}`}></label>
+                      </div>
+                    </td>
+                    <td>{idx + 1}</td>
+                    <td>
+                      <div className="font-weight-bold">{evt.name}</div>
+                      <small className="text-muted">Slots: {evt.participants}/{evt.slots}</small>
+                    </td>
+                    <td>{evt.createdBy}</td>
+                    <td>{evt.date ? new Date(evt.date).toLocaleDateString('vi-VN') : '-'}</td>
+                    <td>{evt.location}</td>
+                    <td>
+                      <span className={statusClass(evt.status)}>
+                        {evt.status}
+                      </span>
+                    </td>
+                    <td className='text-right'>
+                      {!['APPROVED', 'COMPLETED', 'REJECTED'].includes(evt.status) && (
+                        <>
+                          <button
+                            className='btn btn-outline-success btn-sm action-btn'
+                            onClick={() => approveEvent(evt._id)}
+                            title='Duyệt'
+                          >
+                            <FontAwesomeIcon icon={faCheck} />
+                          </button>
+                          <button
+                            className='btn btn-outline-warning btn-sm action-btn'
+                            onClick={() => rejectEvent(evt._id)}
+                            title='Từ chối'
+                          >
+                            <FontAwesomeIcon icon={faTimes} />
+                          </button>
+                        </>
+                      )}
+                      <button 
+                        className='btn btn-outline-danger btn-sm action-btn' 
+                        onClick={() => deleteEvent(evt._id)}
+                        title='Xóa'
+                      >
+                        <FontAwesomeIcon icon={faTrashAlt} />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -249,40 +371,25 @@ const ManageEvents = () => {
 
       {showExportDialog &&
         ReactDOM.createPortal(
-          <div
-            className='confirm-overlay'
-            onClick={() => setShowExportDialog(false)}
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: 'rgba(0,0,0,0.5)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 9999,
-            }}
-          >
-            <div
-              className='confirm-card bg-white p-4 rounded'
-              onClick={(e) => e.stopPropagation()}
-              style={{ minWidth: '350px', maxWidth: '500px' }}
-            >
+          <div className='confirm-overlay' onClick={() => setShowExportDialog(false)}>
+            <div className='confirm-card' onClick={(e) => e.stopPropagation()}>
               <div className='text-right mb-2'>
                 <button
                   type='button'
                   className='btn btn-sm btn-outline-secondary close-btn'
                   onClick={() => setShowExportDialog(false)}
                 >
-                  ×
+                  <FontAwesomeIcon icon={faTimes} />
                 </button>
               </div>
-              <p className='mb-3 text-center'>Chọn định dạng xuất dữ liệu:</p>
-              <div className='d-flex justify-content-around'>
-                <button className='btn btn-primary' onClick={exportCSV}>CSV</button>
-                <button className='btn btn-primary' onClick={exportJSON}>JSON</button>
+              <h5 className='mb-3 text-center'>Chọn định dạng xuất dữ liệu</h5>
+              <div className='d-flex justify-content-around mt-4'>
+                <button className='btn btn-outline-primary' onClick={exportCSV}>
+                  <FontAwesomeIcon icon={faFileCsv} className="mr-2" /> CSV
+                </button>
+                <button className='btn btn-outline-primary' onClick={exportJSON}>
+                  <FontAwesomeIcon icon={faFileCode} className="mr-2" /> JSON
+                </button>
               </div>
             </div>
           </div>,
@@ -291,45 +398,33 @@ const ManageEvents = () => {
 
       {selectedIds.size > 0 &&
         ReactDOM.createPortal(
-          <div
-            style={{
-              position: 'fixed',
-              bottom: 0,
-              left: 0,
-              right: 0,
-              backgroundColor: '#fff',
-              boxShadow: '0 -2px 10px rgba(0,0,0,0.1)',
-              padding: '15px 30px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              zIndex: 1000,
-              borderTop: '1px solid #dee2e6',
-            }}
-          >
+          <div className='bulk-actions-bar'>
             <div className='d-flex align-items-center'>
-              <span className='mr-3'>
-                <strong>{selectedIds.size}</strong> sự kiện đã chọn
+              <span className='mr-3 font-weight-bold'>
+                {selectedIds.size} sự kiện đã chọn
               </span>
             </div>
             <div className='d-flex gap-2'>
-              <button className='btn btn-primary btn-sm mr-2' onClick={exportData}>Xuất dữ liệu</button>
+              <button className='btn btn-primary btn-sm mr-2' onClick={exportData}>
+                <FontAwesomeIcon icon={faDownload} className="mr-1" /> Xuất dữ liệu
+              </button>
               <button
                 className='btn btn-success btn-sm mr-2'
                 onClick={bulkApprove}
-                title='Duyệt các sự kiện đã chọn'
               >
                 <FontAwesomeIcon icon={faCheck} className="mr-1" /> Duyệt
               </button>
               <button
                 className='btn btn-warning btn-sm mr-2'
                 onClick={bulkReject}
-                title='Từ chối các sự kiện đã chọn'
               >
                 <FontAwesomeIcon icon={faTimes} className="mr-1" /> Từ chối
               </button>
-              <button className='btn btn-danger btn-sm' onClick={bulkDelete}>
-                <FontAwesomeIcon icon={faTrashAlt} className="mr-1" /> Xóa
+              <button
+                className='btn btn-danger btn-sm'
+                onClick={bulkDelete}
+              >
+                <FontAwesomeIcon icon={faTrash} className="mr-1" /> Xóa
               </button>
             </div>
           </div>,

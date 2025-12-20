@@ -1,39 +1,65 @@
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faTrash, faLock, faLockOpen } from '@fortawesome/free-solid-svg-icons';
-import React, { useState } from 'react';
+import { 
+  faTrash, 
+  faLock, 
+  faLockOpen, 
+  faFileExport, 
+  faTimes, 
+  faCheck,
+  faSearch,
+  faFileCsv,
+  faFileCode,
+  faDownload,
+  faSync
+} from '@fortawesome/free-solid-svg-icons';
+import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import PreLoader from '../PreLoader/PreLoader';
+import { userService } from '../../services/apiService';
+import './ManageUsers.css';
 // ==============================================================================
 
 const ManageUsers = () => {
-  // Sample user data
-  const sampleUsers = [
-    { _id: '1', name: 'Nguyễn Văn A', email: 'nguyenvana@example.com', username: 'nguyenvana', isLocked: false, role: 'Admin' },
-    { _id: '2', name: 'Trần Thị B', email: 'tranthib@example.com', username: 'tranthib', isLocked: false, role: 'Manager' },
-    { _id: '3', name: 'Phạm Văn C', email: 'phamvanc@example.com', username: 'phamvanc', isLocked: true, role: 'User' },
-    { _id: '4', name: 'Lê Thị D', email: 'lethid@example.com', username: 'lethid', isLocked: false, role: 'User' },
-    { _id: '5', name: 'Hoàng Văn E', email: 'hoangvane@example.com', username: 'hoangvane', isLocked: false, role: 'Manager' },
-    { _id: '6', name: 'Vũ Thị F', email: 'vuthif@example.com', username: 'vuthif', isLocked: false, role: 'User' },
-    { _id: '7', name: 'Đỗ Văn G', email: 'dovang@example.com', username: 'dovang', isLocked: true, role: 'User' },
-    { _id: '8', name: 'Phan Thị H', email: 'phanthih@example.com', username: 'phanthih', isLocked: false, role: 'Manager' },
-    { _id: '9', name: 'Bùi Văn I', email: 'buivani@example.com', username: 'buivani', isLocked: false, role: 'User' },
-    { _id: '10', name: 'Đặng Thị K', email: 'dangthik@example.com', username: 'dangthik', isLocked: false, role: 'User' },
-    { _id: '11', name: 'Ngô Văn L', email: 'ngovanl@example.com', username: 'ngovanl', isLocked: false, role: 'Admin' },
-    { _id: '12', name: 'Cao Thị M', email: 'caothim@example.com', username: 'caothim', isLocked: true, role: 'User' },
-    { _id: '13', name: 'Trịnh Văn N', email: 'trinhvann@example.com', username: 'trinhvann', isLocked: false, role: 'User' },
-    { _id: '14', name: 'Huỳnh Thị O', email: 'huynhthio@example.com', username: 'huynhthio', isLocked: false, role: 'Manager' },
-    { _id: '15', name: 'La Văn P', email: 'lavanp@example.com', username: 'lavanp', isLocked: false, role: 'User' },
-    { _id: '16', name: 'Dương Thị Q', email: 'duongthiq@example.com', username: 'duongthiq', isLocked: false, role: 'User' },
-    { _id: '17', name: 'Tạ Văn R', email: 'tavanr@example.com', username: 'tavanr', isLocked: true, role: 'User' },
-    { _id: '18', name: 'Kiều Thị S', email: 'kieuthis@example.com', username: 'kieuthis', isLocked: false, role: 'Manager' },
-    { _id: '19', name: 'Phùng Văn T', email: 'phungvant@example.com', username: 'phungvant', isLocked: false, role: 'User' },
-    { _id: '20', name: 'Mai Thị U', email: 'maithiu@example.com', username: 'maithiu', isLocked: false, role: 'User' },
-  ];
+  // Removed sampleUsers
 
   // This is table showed in the Admin Dashboard with List of users
   // Set List of Users:
-  const [userList, setUserList] = useState(sampleUsers);
+  const [userList, setUserList] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  const loadUsers = async () => {
+    try {
+      setLoading(true);
+      const response = await userService.getUsers();
+      let users = [];
+      if (response._embedded && response._embedded.users) {
+        users = response._embedded.users;
+      } else if (response.content) {
+        users = response.content;
+      } else if (Array.isArray(response)) {
+        users = response;
+      }
+
+      const mappedUsers = users.map(u => ({
+        _id: u.id,
+        name: u.fullName || `${u.lastname} ${u.firstname}`,
+        email: u.email || 'N/A',
+        username: u.username,
+        isLocked: !u.enabled,
+        role: u.role || (Array.isArray(u.roles) ? u.roles[0] : 'User')
+      }));
+      setUserList(mappedUsers);
+    } catch (error) {
+      console.error("Failed to load users", error);
+    } finally {
+      setLoading(false);
+    }
+  };
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showRoleConfirm, setShowRoleConfirm] = useState(false);
@@ -80,21 +106,48 @@ const ManageUsers = () => {
   };
 
   // Lock/Unlock user
-  const toggleLockUser = (_id) => {
-    setUserList(
-      userList.map((u) =>
-        u._id === _id ? { ...u, isLocked: !u.isLocked } : u
-      )
-    );
+  const toggleLockUser = async (_id) => {
+    const user = userList.find(u => u._id === _id);
+    if (!user) return;
+
+    try {
+      const newEnabledStatus = user.isLocked; 
+      await userService.updateUser(_id, { enabled: newEnabledStatus });
+      
+      setUserList(
+        userList.map((u) =>
+          u._id === _id ? { ...u, isLocked: !u.isLocked } : u
+        )
+      );
+    } catch (error) {
+      console.error("Failed to toggle user lock status", error);
+      alert("Failed to update user status");
+    }
   };
 
-  const bulkLock = () => {
-    setUserList((list) => list.map((u) => (selectedIds.has(u._id) ? { ...u, isLocked: true } : u)));
+  const bulkLock = async () => {
+    const ids = Array.from(selectedIds);
+    for (const id of ids) {
+      try {
+        await userService.updateUser(id, { enabled: false });
+      } catch (error) {
+        console.error(`Failed to lock user ${id}`, error);
+      }
+    }
+    loadUsers();
     setSelectedIds(new Set());
   };
 
-  const bulkUnlock = () => {
-    setUserList((list) => list.map((u) => (selectedIds.has(u._id) ? { ...u, isLocked: false } : u)));
+  const bulkUnlock = async () => {
+    const ids = Array.from(selectedIds);
+    for (const id of ids) {
+      try {
+        await userService.updateUser(id, { enabled: true });
+      } catch (error) {
+        console.error(`Failed to unlock user ${id}`, error);
+      }
+    }
+    loadUsers();
     setSelectedIds(new Set());
   };
 
@@ -177,21 +230,39 @@ const ManageUsers = () => {
     <>
       <PreLoader visibility={preLoaderVisibility} />
 
-      <div className='manage-users-wrapper' style={{ padding: '24px' }}>
-        <div className='bg-white rounded p-3 shadow-sm'>
-          <div className='d-flex justify-content-between align-items-center mb-3'>
-            <h5 className='mb-0'>Danh sách người dùng</h5>
+      <div className='manage-users-wrapper'>
+        <div className='manage-users-card'>
+          <div className='manage-users-header'>
+            <div>
+              <h5 className='mb-1 font-weight-bold'>Danh sách người dùng</h5>
+              <p className='text-muted mb-0 small'>Quản lý tài khoản và phân quyền người dùng</p>
+            </div>
+            <div className='d-flex align-items-center'>
+              <div className='text-muted font-weight-bold mr-3'>
+                Tổng số: {filteredUsers.length}
+              </div>
+              <button className='btn btn-outline-primary btn-sm' onClick={loadUsers} title="Làm mới dữ liệu">
+                <FontAwesomeIcon icon={faSync} />
+              </button>
+            </div>
           </div>
 
-          <div className='d-flex gap-3 mb-3' style={{ position: 'sticky', top: 0, zIndex: 1000, backgroundColor: 'white', padding: '10px 0' }}>
+          <div className='manage-users-filters'>
             <div className='flex-grow-1'>
-              <input
-                type='text'
-                className='form-control'
-                placeholder='Tìm kiếm theo tên, email hoặc username...'
-                value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
-              />
+              <div className="input-group">
+                <div className="input-group-prepend">
+                  <span className="input-group-text bg-white border-right-0">
+                    <FontAwesomeIcon icon={faSearch} className="text-muted" />
+                  </span>
+                </div>
+                <input
+                  type='text'
+                  className='form-control border-left-0'
+                  placeholder='Tìm kiếm theo tên, email hoặc username...'
+                  value={searchText}
+                  onChange={(e) => setSearchText(e.target.value)}
+                />
+              </div>
             </div>
             <div style={{ minWidth: '200px' }}>
               <select
@@ -218,149 +289,122 @@ const ManageUsers = () => {
           </div>
 
           <div className='table-responsive'>
-            <table className='table table-borderless table-hover manage-users-table mb-0'>
-          <thead className='thead-light' style={{ position: 'sticky', top: '60px', zIndex: 990 }}>
-            <tr>
-              <th className='text-secondary text-left' scope='col' style={{ width: '120px' }}>
-                <button
-                  className='btn btn-sm btn-outline-primary'
-                  onClick={toggleSelectAll}
-                >
-                  {selectedIds.size > 0 ? 'Bỏ chọn' : 'Chọn tất cả'}
-                </button>
-              </th>
-              <th className='text-secondary text-left' scope='col'>
-                #
-              </th>
-              <th className='text-secondary' scope='col'>
-                Name
-              </th>
-              <th className='text-secondary' scope='col'>
-                Email
-              </th>
-              <th className='text-secondary' scope='col'>
-                Username
-              </th>
-              <th className='text-secondary' scope='col'>
-                Status
-              </th>
-              <th className='text-secondary' scope='col'>
-                Vai trò
-              </th>
-              <th className='text-secondary' scope='col'>
-                Action
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredUsers.length > 0 ? (
-              filteredUsers.map((userItem) => (
-                <tr key={userItem._id}>
-                  <td>
-                    <input
-                      type='checkbox'
-                      checked={selectedIds.has(userItem._id)}
-                      onChange={() => toggleSelect(userItem._id)}
-                      style={{ width: '20px', height: '20px' }}
-                    />
-                  </td>
-                  <td>{serialNo++}</td>
-                  <td>{userItem.name}</td>
-                  <td>{userItem.email}</td>
-                  <td>{userItem.username}</td>
-                  <td>
-                    <span className={`badge ${userItem.isLocked ? 'badge-danger' : 'badge-success'}`}>
-                      {userItem.isLocked ? 'Đã khóa' : 'Hoạt động'}
-                    </span>
-                  </td>
-                  <td>
-                    <select
-                      className='form-control form-control-sm'
-                      value={userItem.role}
-                      onChange={(e) => handleRoleChangeRequest(userItem._id, e.target.value)}
-                    >
-                      <option value='User'>User</option>
-                      <option value='Admin'>Admin</option>
-                    </select>
-                  </td>
-                  <td>
-                    <div className='d-flex justify-content-between align-items-center'>
-                      <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-start' }}>
+            <table className='table table-hover manage-users-table mb-0'>
+              <thead>
+                <tr>
+                  <th scope='col' style={{ width: '50px' }}>
+                    <div className="custom-control custom-checkbox">
+                      <input
+                        type="checkbox"
+                        className="custom-control-input"
+                        id="selectAll"
+                        checked={selectedIds.size === filteredUsers.length && filteredUsers.length > 0}
+                        onChange={toggleSelectAll}
+                      />
+                      <label className="custom-control-label" htmlFor="selectAll"></label>
+                    </div>
+                  </th>
+                  <th scope='col'>#</th>
+                  <th scope='col'>Họ và tên</th>
+                  <th scope='col'>Email</th>
+                  <th scope='col'>Username</th>
+                  <th scope='col'>Trạng thái</th>
+                  <th scope='col'>Vai trò</th>
+                  <th scope='col' className="text-right">Hành động</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredUsers.length > 0 ? (
+                  filteredUsers.map((userItem, index) => (
+                    <tr key={userItem._id}>
+                      <td>
+                        <div className="custom-control custom-checkbox">
+                          <input
+                            type="checkbox"
+                            className="custom-control-input"
+                            id={`user-${userItem._id}`}
+                            checked={selectedIds.has(userItem._id)}
+                            onChange={() => toggleSelect(userItem._id)}
+                          />
+                          <label className="custom-control-label" htmlFor={`user-${userItem._id}`}></label>
+                        </div>
+                      </td>
+                      <td>{index + 1}</td>
+                      <td>
+                        <div className="font-weight-bold">{userItem.name}</div>
+                      </td>
+                      <td>{userItem.email}</td>
+                      <td>{userItem.username}</td>
+                      <td>
+                        <span className={`user-status-badge ${userItem.isLocked ? 'locked' : 'active'}`}>
+                          {userItem.isLocked ? 'Đã khóa' : 'Hoạt động'}
+                        </span>
+                      </td>
+                      <td>
+                        <select
+                          className={`form-control form-control-sm role-select ${userItem.role ? userItem.role.toLowerCase() : ''}`}
+                          value={userItem.role}
+                          onChange={(e) => handleRoleChangeRequest(userItem._id, e.target.value)}
+                          style={{ width: '100px' }}
+                        >
+                          <option value='User'>User</option>
+                          <option value='Admin'>Admin</option>
+                        </select>
+                      </td>
+                      <td className="text-right">
                         <button
                           onClick={() => toggleLockUser(userItem._id)}
-                          className={`btn btn-sm ${userItem.isLocked ? 'btn-success' : 'btn-warning'}`}
+                          className={`btn btn-sm action-btn ${userItem.isLocked ? 'btn-outline-success' : 'btn-outline-warning'}`}
                           title={userItem.isLocked ? 'Mở khóa' : 'Khóa'}
-                          style={{ minWidth: '95px' }}
                         >
-                          <FontAwesomeIcon icon={userItem.isLocked ? faLockOpen : faLock} size='xs' />
-                          {' '}
-                          {userItem.isLocked ? 'Mở khóa' : 'Khóa'}
+                          <FontAwesomeIcon icon={userItem.isLocked ? faLockOpen : faLock} />
                         </button>
+                        <button
+                          onClick={() => deleteUserAdmin(userItem._id)}
+                          className='btn btn-outline-danger btn-sm action-btn'
+                          title="Xóa"
+                        >
+                          <FontAwesomeIcon icon={faTrash} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan='8' className='text-center py-5'>
+                      <div className="text-muted">
+                        <FontAwesomeIcon icon={faSearch} size="3x" className="mb-3 opacity-50" />
+                        <p>Không tìm thấy người dùng nào phù hợp.</p>
                       </div>
-                      <button
-                        onClick={() => deleteUserAdmin(userItem._id)}
-                        className='btn btn-danger btn-sm'
-                      >
-                        {' '}
-                        <FontAwesomeIcon icon={faTrash} size='xs' />{' '}
-                        Xóa
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan='6' className='text-center'>
-                  No users found
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
 
       {showExportDialog &&
         ReactDOM.createPortal(
-          <div
-            className='confirm-overlay'
-            onClick={() => setShowExportDialog(false)}
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: 'rgba(0,0,0,0.5)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 9999,
-            }}
-          >
-            <div
-              className='confirm-card bg-white p-4 rounded'
-              onClick={(e) => e.stopPropagation()}
-              style={{ minWidth: '350px', maxWidth: '500px' }}
-            >
+          <div className='confirm-overlay' onClick={() => setShowExportDialog(false)}>
+            <div className='confirm-card' onClick={(e) => e.stopPropagation()}>
               <div className='text-right mb-2'>
                 <button
                   type='button'
                   className='btn btn-sm btn-outline-secondary close-btn'
                   onClick={() => setShowExportDialog(false)}
                 >
-                  ×
+                  <FontAwesomeIcon icon={faTimes} />
                 </button>
               </div>
-              <p className='mb-3 text-center'>Chọn định dạng xuất dữ liệu:</p>
-              <div className='d-flex justify-content-around'>
-                <button className='btn btn-primary' onClick={exportCSV}>
-                  CSV
+              <h5 className='mb-3 text-center'>Chọn định dạng xuất dữ liệu</h5>
+              <div className='d-flex justify-content-around mt-4'>
+                <button className='btn btn-outline-primary' onClick={exportCSV}>
+                  <FontAwesomeIcon icon={faFileCsv} className="mr-2" /> CSV
                 </button>
-                <button className='btn btn-primary' onClick={exportJSON}>
-                  JSON
+                <button className='btn btn-outline-primary' onClick={exportJSON}>
+                  <FontAwesomeIcon icon={faFileCode} className="mr-2" /> JSON
                 </button>
               </div>
             </div>
@@ -370,51 +414,33 @@ const ManageUsers = () => {
 
       {selectedIds.size > 0 &&
         ReactDOM.createPortal(
-          <div
-            style={{
-              position: 'fixed',
-              bottom: 0,
-              left: 0,
-              right: 0,
-              backgroundColor: '#fff',
-              boxShadow: '0 -2px 10px rgba(0,0,0,0.1)',
-              padding: '15px 30px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              zIndex: 1000,
-              borderTop: '1px solid #dee2e6',
-            }}
-          >
+          <div className='bulk-actions-bar'>
             <div className='d-flex align-items-center'>
-              <span className='mr-3'>
-                <strong>{selectedIds.size}</strong> người dùng đã chọn
+              <span className='mr-3 font-weight-bold'>
+                {selectedIds.size} người dùng đã chọn
               </span>
             </div>
             <div className='d-flex gap-2'>
               <button className='btn btn-primary btn-sm mr-2' onClick={exportData}>
-                Xuất dữ liệu
+                <FontAwesomeIcon icon={faDownload} className="mr-1" /> Xuất dữ liệu
               </button>
               <button className='btn btn-warning btn-sm mr-2' onClick={bulkLock}>
-                Khóa
+                <FontAwesomeIcon icon={faLock} className="mr-1" /> Khóa
               </button>
               <button className='btn btn-success btn-sm mr-2' onClick={bulkUnlock}>
-                Mở khóa
+                <FontAwesomeIcon icon={faLockOpen} className="mr-1" /> Mở khóa
               </button>
               <button className='btn btn-danger btn-sm' onClick={bulkDelete}>
-                Xóa
+                <FontAwesomeIcon icon={faTrash} className="mr-1" /> Xóa
               </button>
             </div>
           </div>,
           document.body
         )}
+
       {showRoleConfirm && pendingRoleChange && ReactDOM.createPortal(
-        <div className="modal-overlay" onClick={cancelRoleChange} style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex',
-          alignItems: 'center', justifyContent: 'center', zIndex: 1050
-        }}>
-          <div className="bg-white rounded p-4 shadow" style={{ maxWidth: '400px', width: '100%' }} onClick={e => e.stopPropagation()}>
+        <div className="confirm-overlay" onClick={cancelRoleChange}>
+          <div className="confirm-card" onClick={e => e.stopPropagation()}>
             <h5 className="mb-3">Xác nhận thay đổi vai trò</h5>
             <p>
               Bạn có chắc chắn muốn thay đổi vai trò của <strong>{pendingRoleChange.name}</strong> từ 

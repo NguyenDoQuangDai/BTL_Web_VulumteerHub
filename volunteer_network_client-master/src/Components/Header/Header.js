@@ -51,7 +51,7 @@ const Header = () => {
             {isAuthenticated && (
               <Link to='/userDashboard' className='nav-link'>
                 <button type='button' className='btn btn-info w-100'>
-                  My Dashboard
+                  My Profile
                 </button>
               </Link>
             )}
@@ -80,11 +80,13 @@ const Header = () => {
               </div>
             )}
             {/* Redirect to Admin Dashboard */}
-            <Link to='/admin/dashboard' className='nav-link'>
-              <button type='button' className='btn btn-dark w-100'>
-                Admin
-              </button>
-            </Link>
+            {user && (user.role === 'ADMIN' || user.role === 'Admin') && (
+              <Link to='/admin/events' className='nav-link'>
+                <button type='button' className='btn btn-dark w-100'>
+                  Admin
+                </button>
+              </Link>
+            )}
             <Link to='/notifications' className='nav-link' title="Thông báo">
               <FontAwesomeIcon icon={faBell} size="lg" className="text-secondary" />
             </Link>

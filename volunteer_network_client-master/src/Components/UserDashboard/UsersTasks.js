@@ -5,16 +5,13 @@ const UsersTasks = ({ registration, onCancel }) => {
   
   // Handle registration cancellation
   const handleCancel = async () => {
-    if (window.confirm('Are you sure you want to cancel this registration?')) {
-      setCancelling(true);
-      try {
-        // TODO: Implement API call to cancel registration when backend supports it
-        // For now, just call the onCancel prop to remove from UI
-        onCancel(registration.id);
-      } catch (error) {
-        console.error('Error cancelling registration:', error);
-        setCancelling(false);
-      }
+    setCancelling(true);
+    try {
+      // Pass eventId to onCancel
+      onCancel(registration.eventId);
+    } catch (error) {
+      console.error('Error cancelling registration:', error);
+      setCancelling(false);
     }
   };
 
@@ -80,6 +77,8 @@ const UsersTasks = ({ registration, onCancel }) => {
                 <span className={`badge ${
                   registration.status === 'APPROVED' ? 'badge-success' :
                   registration.status === 'PENDING' ? 'badge-warning' :
+                  registration.status === 'REJECTED' ? 'badge-danger' :
+                  registration.status === 'COMPLETED' ? 'badge-info' :
                   'badge-secondary'
                 }`}>
                   Status: {registration.status || 'PENDING'}

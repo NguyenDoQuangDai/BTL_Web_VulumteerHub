@@ -1,8 +1,9 @@
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faTrash } from '@fortawesome/free-solid-svg-icons';
 import React, { useEffect, useState } from 'react';
+import { faTrash } from '@fortawesome/free-solid-svg-icons';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { useAuth } from '../../contexts/AuthContext';
 import PreLoader from '../PreLoader/PreLoader';
+import { adminService, registrationService } from '../../services/apiService';
 // ==============================================================================
 
 const RegisteredDataTables = () => {
@@ -18,25 +19,30 @@ const RegisteredDataTables = () => {
 
   // Get all the Volunteer Register
   useEffect(() => {
-    fetch('https://volunteer-network-react.herokuapp.com/adminTasks')
-      .then((res) => res.json())
-      .then((data) => {
+    const fetchRegistrations = async () => {
+      try {
+        const data = await adminService.getAllRegistrations();
         setTaskList(data);
         setPreLoaderVisibility('none');
-      });
-  }, [taskList]);
+      } catch (error) {
+        console.error("Failed to fetch registrations", error);
+        setPreLoaderVisibility('none');
+      }
+    };
+    fetchRegistrations();
+  }, []);
 
   // Delete task when user click on delete button and update the dashboard
-  const deleteTaskAdmin = (_id) => {
-    fetch(`https://volunteer-network-react.herokuapp.com/deleteTask/${_id}`, {
-      method: 'DELETE',
-    })
-      .then((res) => res.json())
-      .then((result) => {
-        if (result) {
-          console.log(result);
-        }
-      });
+  const deleteTaskAdmin = async (id) => {
+    if (window.confirm("Are you sure you want to delete this registration?")) {
+      try {
+        await registrationService.deleteRegistration(id);
+        setTaskList(prev => prev.filter(task => task.id !== id));
+      } catch (error) {
+        console.error("Failed to delete registration", error);
+        alert("Failed to delete registration");
+      }
+    }
   };
 
   let serialNo = 1;
@@ -70,16 +76,16 @@ const RegisteredDataTables = () => {
           </thead>
           <tbody>
             {taskList.map((task) => (
-              <tr key={task._id}>
+              <tr key={task.id}>
                 <td>{serialNo++}</td>
-                <td>{task.name}</td>
-                <td>{task.email}</td>
-                <td>{task.registrationDate}</td>
-                <td>{task.task}</td>
+                <td>{task.user ? (task.user.fullName || task.user.username) : 'Unknown'}</td>
+                <td>{task.user ? task.user.email : 'Unknown'}</td>
+                <td>{task.registrationDate ? new Date(task.registrationDate).toLocaleDateString('vi-VN') : '-'}</td>
+                <td>{task.event ? task.event.name : 'Unknown Event'}</td>
 
                 <td className='text-center'>
                   <button
-                    onClick={() => deleteTaskAdmin(task._id)}
+                    onClick={() => deleteTaskAdmin(task.id)}
                     className='btn btn-danger'
                   >
                     {' '}

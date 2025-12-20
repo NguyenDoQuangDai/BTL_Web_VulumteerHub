@@ -14,13 +14,18 @@ import {
     faTrashAlt,
     faEdit
 } from '@fortawesome/free-solid-svg-icons';
-import forumData from '../../fakeData/forumData';
-import tasksData from '../../fakeData/tasksData';
+import { postService } from '../../services/apiService';
 import { useAuth } from '../../contexts/AuthContext';
+import { formatDistanceToNow } from 'date-fns';
+import { vi } from 'date-fns/locale';
 
 const Forum = () => {
     const [allPosts, setAllPosts] = useState([]);
     const [activeMenuPostId, setActiveMenuPostId] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [page, setPage] = useState(0);
+    const [hasMore, setHasMore] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
     const { user } = useAuth();
     const history = useHistory();
 
@@ -28,69 +33,158 @@ const Forum = () => {
         loadPosts();
     }, []);
 
-    const loadPosts = () => {
+    useEffect(() => {
+        const handleScroll = () => {
+            if (window.innerHeight + document.documentElement.scrollTop >= document.documentElement.offsetHeight - 100) {
+                if (!loading && !loadingMore && hasMore) {
+                    loadMorePosts();
+                }
+            }
+        };
+
+        window.addEventListener('scroll', handleScroll);
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, [loading, loadingMore, hasMore, page]);
+
+    const mapPost = (post) => {
+        return {
+            id: post.id,
+            eventId: post.eventId,
+            eventName: post.eventName || `Sự kiện #${post.eventId}`,
+            user: post.authorName || post.authorUsername || 'Unknown',
+            username: post.authorUsername,
+            role: post.authorRole || 'Thành viên',
+            avatar: post.authorAvatar,
+            time: formatTime(post.createdAt),
+            content: post.content,
+            likes: post.likes || 0,
+            liked: post.liked,
+            comments: post.commentsCount || 0,
+            shares: 0, // Not implemented in backend yet
+            isPinned: post.pinned,
+            isJoined: false, // Not implemented in backend yet
+            editHistory: [] // Not implemented in backend yet
+        };
+    };
+
+    const loadPosts = async () => {
         try {
-            let forumPosts = JSON.parse(localStorage.getItem('forum_posts') || '{}');
+            setLoading(true);
+            // Initial load: 5 posts
+            const response = await postService.getAllPosts(0, 5);
             
-            if (Object.keys(forumPosts).length === 0) {
-                forumPosts = forumData;
-                localStorage.setItem('forum_posts', JSON.stringify(forumPosts));
+            let rawPosts = [];
+            if (Array.isArray(response)) {
+                rawPosts = response;
+            } else if (response.content) {
+                rawPosts = response.content;
+            } else if (response._embedded && response._embedded.posts) {
+                rawPosts = response._embedded.posts;
+            } else if (response.posts) {
+                rawPosts = response.posts;
             }
 
-            const mockEvents = JSON.parse(localStorage.getItem('mockEvents') || '[]');
-            const eventMap = {};
-            mockEvents.forEach(e => {
-                eventMap[e.id] = e.name;
-            });
-            tasksData.forEach(t => {
-                eventMap[t.taskId] = t.task;
-            });
-
-            let flattenedPosts = [];
-            Object.keys(forumPosts).forEach(eventId => {
-                const posts = forumPosts[eventId];
-                const eventName = eventMap[eventId] || `Sự kiện #${eventId}`;
-                
-                const postsWithEventInfo = posts.map(post => ({
-                    ...post,
-                    eventId,
-                    eventName
-                }));
-                
-                flattenedPosts = [...flattenedPosts, ...postsWithEventInfo];
+            const formattedPosts = rawPosts.map(mapPost);
+            
+            // Sort: Pinned first, then newest (by ID)
+            formattedPosts.sort((a, b) => {
+                if (a.isPinned === b.isPinned) {
+                   return b.id - a.id;
+                }
+                return a.isPinned ? -1 : 1;
             });
 
-            flattenedPosts.sort((a, b) => b.id - a.id);
-            setAllPosts(flattenedPosts);
+            setAllPosts(formattedPosts);
+            setPage(1);
+            setHasMore(rawPosts.length >= 5);
         } catch (e) {
             console.error("Error loading forum posts", e);
+        } finally {
+            setLoading(false);
         }
     };
 
-    const updatePostInStorage = (eventId, postId, updateFn) => {
+    const loadMorePosts = async () => {
+        setLoadingMore(true);
         try {
-            const forumPosts = JSON.parse(localStorage.getItem('forum_posts') || '{}');
-            if (forumPosts[eventId]) {
-                forumPosts[eventId] = forumPosts[eventId].map(p => {
-                    if (p.id === postId) {
-                        return updateFn(p);
-                    }
-                    return p;
-                });
-                localStorage.setItem('forum_posts', JSON.stringify(forumPosts));
-                loadPosts(); // Reload to update UI
+            // Subsequent loads: 3 posts
+            const response = await postService.getAllPosts(page, 3);
+            
+            let rawPosts = [];
+            if (Array.isArray(response)) {
+                rawPosts = response;
+            } else if (response.content) {
+                rawPosts = response.content;
+            } else if (response._embedded && response._embedded.posts) {
+                rawPosts = response._embedded.posts;
+            } else if (response.posts) {
+                rawPosts = response.posts;
             }
+
+            if (rawPosts.length === 0) {
+                setHasMore(false);
+                setLoadingMore(false);
+                return;
+            }
+
+            const formattedPosts = rawPosts.map(mapPost);
+            
+            setAllPosts(prevPosts => {
+                // Filter duplicates
+                const existingIds = new Set(prevPosts.map(p => p.id));
+                const newPosts = formattedPosts.filter(p => !existingIds.has(p.id));
+                
+                const combined = [...prevPosts, ...newPosts];
+                // Re-sort
+                return combined.sort((a, b) => {
+                    if (a.isPinned === b.isPinned) {
+                       return b.id - a.id;
+                    }
+                    return a.isPinned ? -1 : 1;
+                });
+            });
+
+            setPage(prev => prev + 1);
+            if (rawPosts.length < 3) setHasMore(false);
+
         } catch (e) {
-            console.error("Failed to update post", e);
+            console.error("Failed to load more posts", e);
+        } finally {
+            setLoadingMore(false);
         }
     };
 
-    const handleLike = (post) => {
-        updatePostInStorage(post.eventId, post.id, (p) => ({
-            ...p,
-            liked: !p.liked,
-            likes: p.liked ? p.likes - 1 : p.likes + 1
-        }));
+    const formatTime = (dateString) => {
+        if (!dateString) return '';
+        try {
+            return formatDistanceToNow(new Date(dateString), { addSuffix: true, locale: vi });
+        } catch (e) {
+            return dateString;
+        }
+    };
+
+    const handleLike = async (post) => {
+        try {
+            if (post.liked) {
+                await postService.unlikePost(post.id);
+            } else {
+                await postService.likePost(post.id);
+            }
+            
+            // Optimistic update
+            setAllPosts(prevPosts => prevPosts.map(p => {
+                if (p.id === post.id) {
+                    return {
+                        ...p,
+                        liked: !p.liked,
+                        likes: p.liked ? p.likes - 1 : p.likes + 1
+                    };
+                }
+                return p;
+            }));
+        } catch (e) {
+            console.error("Failed to toggle like", e);
+        }
     };
 
     const handleShare = (post) => {
@@ -98,34 +192,36 @@ const Forum = () => {
         navigator.clipboard.writeText(link).then(() => {
             alert('Đã sao chép liên kết sự kiện: ' + link);
         });
-        
-        updatePostInStorage(post.eventId, post.id, (p) => ({
-            ...p,
-            shares: p.shares + 1
-        }));
     };
 
-    const handleDeletePost = (post) => {
+    const handleDeletePost = async (post) => {
         if (window.confirm('Bạn có chắc chắn muốn xóa bài viết này?')) {
             try {
-                const forumPosts = JSON.parse(localStorage.getItem('forum_posts') || '{}');
-                if (forumPosts[post.eventId]) {
-                    forumPosts[post.eventId] = forumPosts[post.eventId].filter(p => p.id !== post.id);
-                    localStorage.setItem('forum_posts', JSON.stringify(forumPosts));
-                    loadPosts();
-                }
+                await postService.deletePost(post.id);
+                setAllPosts(prevPosts => prevPosts.filter(p => p.id !== post.id));
             } catch (e) {
                 console.error("Failed to delete post", e);
+                alert('Không thể xóa bài viết. Vui lòng thử lại sau.');
             }
         }
         setActiveMenuPostId(null);
     };
 
-    const handlePinPost = (post) => {
-        updatePostInStorage(post.eventId, post.id, (p) => ({
-            ...p,
-            isPinned: !p.isPinned
-        }));
+    const handlePinPost = async (post) => {
+        try {
+            await postService.updatePost(post.id, { pinned: !post.isPinned });
+            setAllPosts(prevPosts => prevPosts.map(p => {
+                if (p.id === post.id) {
+                    return {
+                        ...p,
+                        isPinned: !p.isPinned
+                    };
+                }
+                return p;
+            }));
+        } catch (e) {
+            console.error("Failed to pin/unpin post", e);
+        }
         setActiveMenuPostId(null);
     };
 
@@ -254,6 +350,14 @@ const Forum = () => {
                                 </div>
                             </div>
                         ))}
+                    </div>
+                )}
+                {loadingMore && (
+                    <div className="text-center py-3">
+                        <div className="spinner-border text-primary spinner-border-sm" role="status">
+                            <span className="sr-only">Loading...</span>
+                        </div>
+                        <span className="ml-2 text-muted small">Đang tải thêm...</span>
                     </div>
                 )}
             </div>

@@ -23,8 +23,11 @@ export const API_ENDPOINTS = {
   // Registrations
   REGISTRATIONS: {
     LIST: `${API_BASE_URL}/registrations`,
-    CREATE: `${API_BASE_URL}/registrations`,
+    CREATE: (eventId) => `${API_BASE_URL}/registrations/${eventId}/join`,
     GET: (id) => `${API_BASE_URL}/registrations/${id}`,
+    APPROVE: (id) => `${API_BASE_URL}/registrations/${id}/approve`,
+    REJECT: (id) => `${API_BASE_URL}/registrations/${id}/reject`,
+    DELETE: (id) => `${API_BASE_URL}/registrations/${id}`,
   },
   
   // Users
@@ -32,6 +35,7 @@ export const API_ENDPOINTS = {
     LIST: `${API_BASE_URL}/users`,
     GET: (id) => `${API_BASE_URL}/users/${id}`,
     CREATE: `${API_BASE_URL}/users`,
+    UPDATE: (id) => `${API_BASE_URL}/users/${id}`,
   },
   
   // Admin
@@ -42,6 +46,25 @@ export const API_ENDPOINTS = {
     REJECT_EVENT: (id) => `${API_BASE_URL}/admin/events/${id}/reject`,
     GET_ALL_EVENTS: `${API_BASE_URL}/admin/events`,
     GET_ALL_REGISTRATIONS: `${API_BASE_URL}/admin/registrations`,
+  },
+
+  // Posts
+  POSTS: {
+    LIST_ALL: `${API_BASE_URL}/posts`,
+    LIST_BY_EVENT: (eventId) => `${API_BASE_URL}/events/${eventId}/posts`,
+    CREATE: (eventId) => `${API_BASE_URL}/events/${eventId}/posts`,
+    GET: (id) => `${API_BASE_URL}/posts/${id}`,
+    UPDATE: (id) => `${API_BASE_URL}/posts/${id}`,
+    DELETE: (id) => `${API_BASE_URL}/posts/${id}`,
+    REACT: (id, type) => `${API_BASE_URL}/posts/${id}/reaction/${type}`,
+  },
+
+  // Comments
+  COMMENTS: {
+    LIST_BY_POST: (postId) => `${API_BASE_URL}/posts/${postId}/comments`,
+    CREATE: (postId) => `${API_BASE_URL}/posts/${postId}/comments`,
+    REPLY: (postId, commentId) => `${API_BASE_URL}/posts/${postId}/comments/${commentId}/reply`,
+    DELETE: (commentId) => `${API_BASE_URL}/comments/${commentId}`,
   }
 };
 

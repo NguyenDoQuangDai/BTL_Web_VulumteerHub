@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { eventService, postService, registrationService } from '../../services/apiService';
+import API_BASE_URL from '../../config/api';
 import ReactDOM from 'react-dom';
 import EventChannelSidebar from './EventChannelSidebar';
 import EditHistoryModal from './EditHistoryModal';
@@ -29,6 +31,7 @@ import {
   faGlobeAmericas,
   faThumbtack,
   faHistory,
+  faSync,
   faHeart as faHeartSolid,
 } from '@fortawesome/free-solid-svg-icons';
 import { faHeart as faHeartRegular } from '@fortawesome/free-regular-svg-icons';
@@ -118,7 +121,7 @@ const ImageCarousel = ({ images }) => {
   );
 };
 
-const EventDetails = ({ event, user }) => {
+const EventDetails = ({ event, user, onEventUpdate }) => {
   let eventImages = event.images || event.imageUrls || (event.imageUrl ? [event.imageUrl] : []);
 
   // Fallback to sample images if no images are provided
@@ -133,47 +136,18 @@ const EventDetails = ({ event, user }) => {
   // Permission logic
   const isOwner = user && (
     (event.username && user.username === event.username) ||
-    (event.owner && user.username === event.owner)
+    (event.owner && user.username === event.owner) ||
+    (event.ownerId && user.id === event.ownerId)
   );
   const isAdmin = user && (user.role === 'Quản trị viên' || user.role === 'ADMIN');
-  const isManager = user && (user.role === 'Quản lý sự kiện' || user.role === 'EVENT_MANAGER');
 
-  const canEdit = isOwner || isAdmin;
+  const canEdit = isOwner;
   const canDelete = isOwner || isAdmin;
 
-  // Logic for Register/Interested (similar to EventCard)
-  const readInterested = () => {
-    try {
-      const raw = localStorage.getItem('interestedEvents');
-      return raw ? new Set(JSON.parse(raw)) : new Set();
-    } catch {
-      return new Set();
-    }
-  };
-
-  const writeInterested = (set) => {
-    try {
-      localStorage.setItem('interestedEvents', JSON.stringify(Array.from(set)));
-    } catch {}
-  };
-
-  const readRegistered = () => {
-    try {
-      const raw = localStorage.getItem('registeredEvents');
-      return raw ? new Set(JSON.parse(raw)) : new Set();
-    } catch {
-      return new Set();
-    }
-  };
-
-  const writeRegistered = (set) => {
-    try {
-      localStorage.setItem('registeredEvents', JSON.stringify(Array.from(set)));
-    } catch {}
-  };
-
-  const [interested, setInterested] = useState(() => readInterested().has(event.id));
-  const [registered, setRegistered] = useState(() => readRegistered().has(event.id));
+  const [registered, setRegistered] = useState(false);
+  const [registrationId, setRegistrationId] = useState(null);
+  const [registrationStatus, setRegistrationStatus] = useState(null);
+  const [loadingReg, setLoadingReg] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
@@ -186,6 +160,47 @@ const EventDetails = ({ event, user }) => {
     endDate: event.endDate || '',
     images: event.images || (event.image || event.imageUrl ? [event.image || event.imageUrl] : []),
   });
+
+  useEffect(() => {
+      const checkRegistration = async () => {
+          if (!user) return;
+          try {
+              const regs = await registrationService.getUserRegistrations();
+              let myRegs = [];
+              if (regs._embedded && regs._embedded.registrations) {
+                  myRegs = regs._embedded.registrations;
+              } else if (regs.content) {
+                  myRegs = regs.content;
+              }
+              
+              const myReg = myRegs.find(r => r.eventId === event.id);
+              if (myReg) {
+                  setRegistered(true);
+                  setRegistrationId(myReg.id);
+                  setRegistrationStatus(myReg.status);
+              } else {
+                  setRegistered(false);
+                  setRegistrationId(null);
+                  setRegistrationStatus(null);
+              }
+          } catch (e) {
+              console.error("Failed to check registration", e);
+          }
+      };
+      checkRegistration();
+  }, [event.id, user]);
+
+  useEffect(() => {
+      setEditForm({
+        name: event.name || '',
+        description: event.description || '',
+        location: event.location || '',
+        dateDeadline: event.dateDeadline || '',
+        startDate: event.startDate || '',
+        endDate: event.endDate || '',
+        images: event.images || (event.image || event.imageUrl ? [event.image || event.imageUrl] : []),
+      });
+  }, [event]);
 
   const handleImageChange = (e) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -236,54 +251,75 @@ const EventDetails = ({ event, user }) => {
     }
   };
 
-  const handleSaveChanges = () => {
+  const handleSaveChanges = async () => {
     try {
-      const mockEvents = JSON.parse(localStorage.getItem('mockEvents') || '[]');
-      const index = mockEvents.findIndex(e => e.id === event.id);
-      if (index !== -1) {
-        const updatedEvent = {
-          ...mockEvents[index],
-          ...editForm
-        };
-        mockEvents[index] = updatedEvent;
-        localStorage.setItem('mockEvents', JSON.stringify(mockEvents));
-        window.dispatchEvent(new Event('storage'));
+      await eventService.updateEvent(event.id, editForm);
+      if (onEventUpdate) {
+          const updated = await eventService.getEvent(event.id);
+          onEventUpdate(updated);
       }
+      setShowEditForm(false);
     } catch (e) {
-      console.error("Failed to update local event", e);
+      console.error("Failed to update event", e);
+      alert("Failed to update event: " + e.message);
     }
-    setShowEditForm(false);
   };
 
-  const toggleInterested = () => {
-    const s = readInterested();
-    if (s.has(event.id)) {
-      s.delete(event.id);
-      setInterested(false);
-    } else {
-      s.add(event.id);
-      setInterested(true);
-    }
-    writeInterested(s);
-  };
-
-  const handleRegister = () => {
+  const handleRegister = async () => {
     if (registered) {
       setShowConfirm(true);
     } else {
-      const s = readRegistered();
-      s.add(event.id);
-      writeRegistered(s);
-      setRegistered(true);
+      try {
+          setLoadingReg(true);
+          const reg = await registrationService.registerForEvent(event.id);
+          setRegistered(true);
+          setRegistrationId(reg.id);
+          if (onEventUpdate) {
+               const updated = await eventService.getEvent(event.id);
+               onEventUpdate(updated);
+          }
+      } catch (e) {
+          alert("Failed to register: " + e.message);
+      } finally {
+          setLoadingReg(false);
+      }
     }
   };
 
-  const confirmUnregister = () => {
-    const s = readRegistered();
-    s.delete(event.id);
-    writeRegistered(s);
-    setRegistered(false);
-    setShowConfirm(false);
+  const confirmUnregister = async () => {
+    try {
+        setLoadingReg(true);
+        if (registrationId) {
+            await registrationService.deleteRegistration(registrationId);
+            setRegistered(false);
+            setRegistrationId(null);
+            setShowConfirm(false);
+             if (onEventUpdate) {
+               const updated = await eventService.getEvent(event.id);
+               onEventUpdate(updated);
+            }
+        }
+    } catch (e) {
+        alert("Failed to unregister: " + e.message);
+    } finally {
+        setLoadingReg(false);
+    }
+  };
+
+  const handleDeleteEvent = async () => {
+      if(window.confirm('Bạn có chắc chắn muốn xóa sự kiện này?')) {
+          try {
+              await eventService.deleteEvent(event.id);
+              alert('Đã xóa sự kiện');
+              // Redirect or close modal? 
+              // Since this is a modal/dashboard, we probably want to close it.
+              // But we don't have onClose prop here easily accessible unless we pass it.
+              // Assuming parent handles it or we reload.
+              window.location.reload(); 
+          } catch (e) {
+              alert("Failed to delete event: " + e.message);
+          }
+      }
   };
 
   return (
@@ -301,10 +337,16 @@ const EventDetails = ({ event, user }) => {
             <div>
                 <button
                   type="button"
-                  className={`btn btn-sm mr-2 ${registered ? 'btn-outline-danger' : 'btn-primary'}`}
+                  className={`btn btn-sm mr-2 ${
+                    registrationStatus === 'REJECTED' ? 'btn-secondary' :
+                    registered ? 'btn-outline-danger' : 'btn-primary'
+                  }`}
                   onClick={handleRegister}
+                  disabled={loadingReg || registrationStatus === 'REJECTED'}
                 >
-                  {registered ? 'Hủy đăng ký' : 'Đăng ký tham gia'}
+                  {loadingReg ? 'Đang xử lý...' : 
+                   registrationStatus === 'REJECTED' ? 'Đã bị từ chối' :
+                   (registered ? 'Hủy đăng ký' : 'Đăng ký tham gia')}
                 </button>
             </div>
             <div>
@@ -319,11 +361,7 @@ const EventDetails = ({ event, user }) => {
                 {canDelete && (
                     <button 
                         className="btn btn-sm btn-outline-danger"
-                        onClick={() => {
-                            if(window.confirm('Bạn có chắc chắn muốn xóa sự kiện này?')) {
-                                alert('Đã xóa sự kiện (Demo)');
-                            }
-                        }}
+                        onClick={handleDeleteEvent}
                     >
                         <FontAwesomeIcon icon={faTrashAlt} className="mr-1" /> Xóa
                     </button>
@@ -579,27 +617,71 @@ const EventDetails = ({ event, user }) => {
   );
 };
 
-const MembersList = () => {
+const MembersList = ({ event, user }) => {
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [members, setMembers] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  const members = [
-    { id: 1, name: 'Nguyễn Văn A', email: 'nguyenvana@example.com', username: 'nguyenvana', role: 'Quản trị viên', status: 'Active', joinedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30).toISOString() },
-    { id: 2, name: 'Trần Thị B', email: 'tranthib@example.com', username: 'tranthib', role: 'Quản lý sự kiện', status: 'Active', joinedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 15).toISOString() },
-    { id: 3, name: 'Lê Văn C', email: 'levanc@example.com', username: 'levanc', role: 'Tình nguyện viên', status: 'Pending', joinedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 10).toISOString() },
-    { id: 4, name: 'Phạm Thị D', email: 'phamthid@example.com', username: 'phamthid', role: 'Tình nguyện viên', status: 'Active', joinedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString() },
-    { id: 5, name: 'Hoàng Văn E', email: 'hoangvane@example.com', username: 'hoangvane', role: 'Quản lý sự kiện', status: 'Pending', joinedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString() },
-  ];
+  // Determine if the current user has management permissions
+  const canManage = user && (user.role === 'ADMIN' || event.ownerId === user.id || event.username === user.username);
+
+  useEffect(() => {
+    if (event && event.id) {
+      fetchMembers();
+    }
+  }, [event]);
+
+  const fetchMembers = async () => {
+    try {
+      setLoading(true);
+      const data = await registrationService.getRegistrationsByEvent(event.id);
+      const mappedMembers = data.map(reg => ({
+        id: reg.id,
+        userId: reg.userId,
+        name: reg.fullName || reg.username,
+        email: reg.username, // Assuming username is email or similar
+        username: reg.username,
+        role: mapRole(reg.role),
+        status: reg.status,
+        joinedAt: reg.createdAt
+      }));
+      setMembers(mappedMembers);
+    } catch (error) {
+      console.error("Failed to fetch members", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const mapRole = (role) => {
+      if (role === 'ADMIN') return 'Quản trị viên';
+      if (role === 'EVENT_MANAGER') return 'Quản lý sự kiện';
+      return 'Tình nguyện viên';
+  };
 
   const filteredMembers = members.filter(member => {
-    const matchesSearch = member.name.toLowerCase().includes(searchText.toLowerCase()) ||
-                          member.email.toLowerCase().includes(searchText.toLowerCase()) ||
-                          member.username.toLowerCase().includes(searchText.toLowerCase());
+    const matchesSearch = (member.name || '').toLowerCase().includes(searchText.toLowerCase()) ||
+                          (member.email || '').toLowerCase().includes(searchText.toLowerCase()) ||
+                          (member.username || '').toLowerCase().includes(searchText.toLowerCase());
     const matchesStatus = statusFilter ? member.status === statusFilter : true;
     const matchesRole = roleFilter ? member.role === roleFilter : true;
     return matchesSearch && matchesStatus && matchesRole;
+  }).sort((a, b) => {
+      // 1. Current user first
+      if (user && a.username === user.username) return -1;
+      if (user && b.username === user.username) return 1;
+
+      // 2. Event Managers (Quản trị viên or Quản lý sự kiện) second
+      const isAManager = a.role === 'Quản trị viên' || a.role === 'Quản lý sự kiện';
+      const isBManager = b.role === 'Quản trị viên' || b.role === 'Quản lý sự kiện';
+      if (isAManager && !isBManager) return -1;
+      if (!isAManager && isBManager) return 1;
+
+      // 3. Others
+      return 0;
   });
 
   const toggleSelect = (id) => {
@@ -619,10 +701,120 @@ const MembersList = () => {
     });
   };
 
+  const getStatusBadge = (status) => {
+      switch (status) {
+          case 'APPROVED': return 'badge-success';
+          case 'PENDING': return 'badge-warning';
+          case 'REJECTED': return 'badge-danger';
+          case 'CANCELED': return 'badge-secondary';
+          case 'COMPLETED': return 'badge-info';
+          default: return 'badge-secondary';
+      }
+  };
+
+  const getStatusLabel = (status) => {
+      switch (status) {
+          case 'APPROVED': return 'Đã duyệt';
+          case 'PENDING': return 'Chờ duyệt';
+          case 'REJECTED': return 'Từ chối';
+          case 'CANCELED': return 'Đã hủy';
+          case 'COMPLETED': return 'Hoàn thành';
+          default: return status;
+      }
+  };
+
+  const handleApprove = async (id) => {
+    try {
+      await registrationService.approveRegistration(id);
+      fetchMembers();
+    } catch (error) {
+      console.error("Failed to approve", error);
+      alert("Failed to approve: " + error.message);
+    }
+  };
+
+  const handleReject = async (id) => {
+    try {
+      await registrationService.rejectRegistration(id);
+      fetchMembers();
+    } catch (error) {
+      console.error("Failed to reject", error);
+      alert("Failed to reject: " + error.message);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Bạn có chắc chắn muốn hủy đăng ký này?")) return;
+    try {
+      await registrationService.deleteRegistration(id);
+      fetchMembers();
+    } catch (error) {
+      console.error("Failed to delete", error);
+      alert("Failed to delete: " + error.message);
+    }
+  };
+
+  const handleBulkApprove = async () => {
+    try {
+      const idsToApprove = Array.from(selectedIds).filter(id => {
+        const member = members.find(m => m.id === id);
+        return member && member.status === 'PENDING';
+      });
+
+      if (idsToApprove.length === 0) {
+        alert("Không có thành viên nào hợp lệ để duyệt (chỉ duyệt các thành viên đang chờ duyệt).");
+        return;
+      }
+
+      await Promise.all(idsToApprove.map(id => registrationService.approveRegistration(id)));
+      setSelectedIds(new Set());
+      fetchMembers();
+    } catch (error) {
+      console.error("Failed to bulk approve", error);
+      alert("Some operations failed");
+    }
+  };
+
+  const handleBulkReject = async () => {
+    try {
+      const idsToReject = Array.from(selectedIds).filter(id => {
+        const member = members.find(m => m.id === id);
+        return member && member.status === 'PENDING';
+      });
+
+      if (idsToReject.length === 0) {
+        alert("Không có thành viên nào hợp lệ để từ chối (chỉ từ chối các thành viên đang chờ duyệt).");
+        return;
+      }
+
+      await Promise.all(idsToReject.map(id => registrationService.rejectRegistration(id)));
+      setSelectedIds(new Set());
+      fetchMembers();
+    } catch (error) {
+      console.error("Failed to bulk reject", error);
+      alert("Some operations failed");
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!window.confirm(`Bạn có chắc chắn muốn hủy ${selectedIds.size} đăng ký này?`)) return;
+    try {
+      await Promise.all(Array.from(selectedIds).map(id => registrationService.deleteRegistration(id)));
+      setSelectedIds(new Set());
+      fetchMembers();
+    } catch (error) {
+      console.error("Failed to bulk delete", error);
+      alert("Some operations failed");
+    }
+  };
+
   return (
     <div className='p-4'>
       <div className='d-flex justify-content-between align-items-center mb-4'>
         <h5 className='font-weight-bold'>Danh sách tình nguyện viên ({filteredMembers.length})</h5>
+        <button className="btn btn-sm btn-outline-primary" onClick={fetchMembers}>
+            <FontAwesomeIcon icon={faSync} className={loading ? "fa-spin" : ""} /> Làm mới
+        </button>
       </div>
       <div className='bg-white rounded shadow-sm p-3'>
         <div className='d-flex mb-3'>
@@ -642,8 +834,10 @@ const MembersList = () => {
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
                 <option value=''>Tất cả trạng thái</option>
-                <option value='Active'>Đã duyệt</option>
-                <option value='Pending'>Chờ duyệt</option>
+                <option value='APPROVED'>Đã duyệt</option>
+                <option value='PENDING'>Chờ duyệt</option>
+                <option value='REJECTED'>Từ chối</option>
+                <option value='COMPLETED'>Hoàn thành</option>
               </select>
             </div>
             <div style={{ minWidth: '200px' }}>
@@ -654,135 +848,137 @@ const MembersList = () => {
               >
                 <option value=''>Tất cả vai trò</option>
                 <option value='Quản trị viên'>Quản trị viên</option>
-                <option value='Quản lý sự kiện'>Quản lý sự kiện</option>
                 <option value='Tình nguyện viên'>Tình nguyện viên</option>
               </select>
             </div>
         </div>
 
+        {/* Bulk Actions - Only visible if user can manage and items are selected */}
+        {canManage && selectedIds.size > 0 && (
+            <div className="mb-3 p-2 bg-light rounded d-flex align-items-center">
+                <span className="mr-3 font-weight-bold text-primary">Đã chọn: {selectedIds.size}</span>
+                <button className="btn btn-sm btn-success mr-2" onClick={handleBulkApprove}>
+                    <FontAwesomeIcon icon={faCheck} className="mr-1" /> Duyệt
+                </button>
+                <button className="btn btn-sm btn-warning mr-2" onClick={handleBulkReject}>
+                    <FontAwesomeIcon icon={faTimes} className="mr-1" /> Từ chối
+                </button>
+                <button className="btn btn-sm btn-danger" onClick={handleBulkDelete}>
+                    <FontAwesomeIcon icon={faTrashAlt} className="mr-1" /> Xóa
+                </button>
+            </div>
+        )}
+
+        {loading ? (
+            <div className="text-center py-5">
+                <div className="spinner-border text-primary" role="status">
+                    <span className="sr-only">Loading...</span>
+                </div>
+            </div>
+        ) : (
         <div className="table-responsive">
             <table className="table table-borderless table-hover">
                 <thead className="thead-light">
                     <tr>
-                        <th className="text-secondary text-left" scope="col" style={{ width: '120px' }}>
-                            <button
-                                className='btn btn-sm btn-outline-primary'
-                                onClick={toggleSelectAll}
-                            >
-                                {selectedIds.size > 0 ? 'Bỏ chọn' : 'Chọn tất cả'}
-                            </button>
-                        </th>
+                        {canManage && (
+                            <th className="text-secondary text-left" scope="col" style={{ width: '120px' }}>
+                                <button
+                                    className='btn btn-sm btn-outline-primary'
+                                    onClick={toggleSelectAll}
+                                >
+                                    {selectedIds.size > 0 ? 'Bỏ chọn' : 'Chọn tất cả'}
+                                </button>
+                            </th>
+                        )}
                         <th className="text-secondary text-left" scope="col">#</th>
                         <th className="text-secondary" scope="col">Họ và tên</th>
                         <th className="text-secondary" scope="col">Email</th>
                         <th className="text-secondary" scope="col">Tên đăng nhập</th>
                         <th className="text-secondary" scope="col">Trạng thái</th>
                         <th className="text-secondary" scope="col">Vai trò</th>
-                        <th className="text-secondary text-center" scope="col">Hành động</th>
+                        {canManage && <th className="text-secondary text-center" scope="col">Hành động</th>}
                     </tr>
                 </thead>
                 <tbody>
-                    {filteredMembers.map((member, index) => (
-                        <tr key={member.id}>
-                            <td>
-                                <input
-                                    type='checkbox'
-                                    checked={selectedIds.has(member.id)}
-                                    onChange={() => toggleSelect(member.id)}
-                                    style={{ width: '20px', height: '20px' }}
-                                />
+                    {filteredMembers.length === 0 ? (
+                        <tr>
+                            <td colSpan={canManage ? "8" : "7"} className="text-center py-4 text-muted">
+                                Không tìm thấy thành viên nào
                             </td>
+                        </tr>
+                    ) : (
+                    filteredMembers.map((member, index) => (
+                        <tr key={member.id} className={user && member.username === user.username ? "table-primary" : ""}>
+                            {canManage && (
+                                <td>
+                                    <input
+                                        type='checkbox'
+                                        checked={selectedIds.has(member.id)}
+                                        onChange={() => toggleSelect(member.id)}
+                                        style={{ transform: 'scale(1.5)' }}
+                                    />
+                                </td>
+                            )}
                             <td>{index + 1}</td>
                             <td>
-                                <div className="d-flex align-items-center">
-                                    <div className="bg-light rounded-circle d-flex align-items-center justify-content-center mr-2" style={{ width: '30px', height: '30px' }}>
-                                        <FontAwesomeIcon icon={faUser} className="text-secondary small" />
-                                    </div>
-                                    <span className="font-weight-bold">{member.name}</span>
-                                </div>
+                                <div className="font-weight-bold">{member.name}</div>
+                                <small className="text-muted">Tham gia: {new Date(member.joinedAt).toLocaleDateString()}</small>
                             </td>
                             <td>{member.email}</td>
                             <td>{member.username}</td>
                             <td>
-                                <span className={`badge ${member.status === 'Active' ? 'badge-success' : 'badge-warning'} p-2`}>
-                                    {member.status === 'Active' ? 'Đã duyệt' : 'Chờ duyệt'}
+                                <span className={`badge ${getStatusBadge(member.status)} p-2`}>
+                                    {getStatusLabel(member.status)}
                                 </span>
                             </td>
-                            <td>{member.role}</td>
-                            <td className="text-center">
-                                {member.status === 'Pending' ? (
-                                    <>
-                                        <button className="btn btn-sm btn-outline-success mr-2">
-                                            <FontAwesomeIcon icon={faCheck} className="mr-1" />
-                                            Duyệt
-                                        </button>
-                                        <button className="btn btn-sm btn-outline-danger">
-                                            <FontAwesomeIcon icon={faTimes} className="mr-1" />
-                                            Từ chối
-                                        </button>
-                                    </>
-                                ) : (
-                                    <button className="btn btn-sm btn-outline-danger">
-                                        <FontAwesomeIcon icon={faTrashAlt} className="mr-1" />
-                                        Hủy đăng ký
-                                    </button>
-                                )}
+                            <td>
+                                <span className={`badge ${member.role === 'Quản trị viên' ? 'badge-primary' : 'badge-light'} p-2`}>
+                                    {member.role}
+                                </span>
                             </td>
+                            {canManage && (
+                                <td className="text-center">
+                                    <div className="btn-group">
+                                        {member.status === 'PENDING' && (
+                                            <>
+                                                <button 
+                                                    className="btn btn-sm btn-success" 
+                                                    title="Duyệt"
+                                                    onClick={() => handleApprove(member.id)}
+                                                >
+                                                    <FontAwesomeIcon icon={faCheck} />
+                                                </button>
+                                                <button 
+                                                    className="btn btn-sm btn-warning" 
+                                                    title="Từ chối"
+                                                    onClick={() => handleReject(member.id)}
+                                                >
+                                                    <FontAwesomeIcon icon={faTimes} />
+                                                </button>
+                                            </>
+                                        )}
+                                        <button 
+                                            className="btn btn-sm btn-danger" 
+                                            title="Xóa"
+                                            onClick={() => handleDelete(member.id)}
+                                        >
+                                            <FontAwesomeIcon icon={faTrashAlt} />
+                                        </button>
+                                    </div>
+                                </td>
+                            )}
                         </tr>
-                    ))}
+                    ))
+                    )}
                 </tbody>
             </table>
         </div>
-      </div>
-      {selectedIds.size > 0 &&
-        ReactDOM.createPortal(
-          <div
-            style={{
-              position: 'fixed',
-              bottom: 0,
-              left: 0,
-              right: 0,
-              backgroundColor: '#fff',
-              boxShadow: '0 -2px 10px rgba(0,0,0,0.1)',
-              padding: '15px 30px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              zIndex: 10000,
-              borderTop: '1px solid #dee2e6',
-            }}
-          >
-            <div className='d-flex align-items-center'>
-              <span className='mr-3'>
-                <strong>{selectedIds.size}</strong> tình nguyện viên đã chọn
-              </span>
-            </div>
-            <div className='d-flex gap-2'>
-              <button 
-                className='btn btn-success btn-sm mr-2'
-                onClick={() => setSelectedIds(new Set())}
-              >
-                <FontAwesomeIcon icon={faCheck} className="mr-1" /> Duyệt
-              </button>
-              <button 
-                className='btn btn-warning btn-sm mr-2'
-                onClick={() => setSelectedIds(new Set())}
-              >
-                <FontAwesomeIcon icon={faTimes} className="mr-1" /> Từ chối
-              </button>
-              <button 
-                className='btn btn-danger btn-sm'
-                onClick={() => setSelectedIds(new Set())}
-              >
-                <FontAwesomeIcon icon={faTrashAlt} className="mr-1" /> Hủy đăng ký
-              </button>
-            </div>
-          </div>,
-          document.body
         )}
+      </div>
     </div>
   );
 };
+
 
 const getRoleLevel = (role) => {
     if (!role) return 0;
@@ -806,90 +1002,235 @@ const DiscussionTab = ({ event, user }) => {
   const [editingPostId, setEditingPostId] = useState(null);
   const [editContent, setEditContent] = useState('');
   const [viewingHistoryPostId, setViewingHistoryPostId] = useState(null);
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  const [posts, setPosts] = useState(() => {
-    try {
-      const allPosts = JSON.parse(localStorage.getItem('forum_posts') || '{}');
-      if (allPosts[event.id]) {
-        return allPosts[event.id];
-      }
-      // Default sample posts
-      return [
-        {
-          id: 1,
-          user: 'Nguyễn Văn A',
-          username: 'nguyenvana',
-          role: 'Quản trị viên',
-          time: '2 giờ trước',
-          content: 'Chào mọi người! Ngày mai chúng ta sẽ tập trung tại sảnh chính lúc 7:00 sáng nhé. Mọi người nhớ mặc áo đồng phục.',
-          likes: 12,
-          comments: 3,
-          shares: 0,
-          liked: true,
-          isPinned: true,
-          isJoined: true,
-          editHistory: [
-              { content: 'Chào mọi người! Ngày mai tập trung lúc 7h nhé.', time: '2 giờ trước' }
-          ]
-        },
-        {
-          id: 2,
-          user: 'Trần Thị B',
-          username: 'tranthib',
-          role: 'Tình nguyện viên',
-          time: '5 giờ trước',
-          content: 'Mình có thể đến muộn khoảng 15 phút được không ạ? Xe bus chuyến sớm nhất 6:30 mới chạy.',
-          likes: 2,
-          comments: 5,
-          shares: 0,
-          liked: false,
-          isPinned: false,
-          isJoined: false,
-          editHistory: []
-        }
-      ];
-    } catch (e) {
-      return [];
-    }
-  });
+  // Permission logic
+  const isOwner = !!(user && event && (
+    (event.ownerId && user.id == event.ownerId) ||
+    (event.username && user.username === event.username) ||
+    (event.owner && user.username === event.owner)
+  ));
+  const isManager = !!(user && (user.role === 'Quản lý sự kiện' || user.role === 'EVENT_MANAGER' || isOwner));
+  const isAdmin = !!(user && (user.role === 'Quản trị viên' || user.role === 'ADMIN'));
+  const canManagePosts = isManager || isAdmin;
 
   useEffect(() => {
+      // Debug logs removed for production
+  }, [user, event, isOwner, isManager, isAdmin, canManagePosts]);
+
+  useEffect(() => {
+    loadPosts();
+  }, [event.id]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.innerHeight + document.documentElement.scrollTop >= document.documentElement.offsetHeight - 100) {
+        if (!loading && !loadingMore && hasMore) {
+          loadMorePosts();
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [loading, loadingMore, hasMore, page]);
+
+  const mapPost = (p) => {
+      // Handle user/author mapping
+      let displayUser = 'Unknown';
+      if (p.authorName) displayUser = p.authorName;
+      else if (p.username) displayUser = p.username;
+      else if (p.user && typeof p.user === 'object') displayUser = p.user.fullName || p.user.username || p.user.name;
+      else if (p.user) displayUser = p.user;
+      
+      // Handle role mapping
+      let displayRole = p.role || 'Thành viên';
+      if (p.author && p.author.role) displayRole = p.author.role;
+
+      // Handle media
+      let media = [];
+      if (p.mediaUrls && Array.isArray(p.mediaUrls)) {
+          media = p.mediaUrls;
+      } else if (p.images && Array.isArray(p.images)) {
+          media = p.images;
+      }
+
+      return {
+        ...p,
+        id: p.id,
+        user: displayUser,
+        role: displayRole,
+        time: p.createdAt ? formatDateTime(p.createdAt) : (p.time || 'Just now'),
+        content: p.content || '',
+        likes: p.likes || 0,
+        comments: p.commentsCount || p.comments || 0,
+        shares: p.shares || 0,
+        liked: p.liked || false,
+        isPinned: p.pinned || p.isPinned || false,
+        commentsList: [],
+        commentsLoaded: false,
+        showComments: false,
+        editHistory: p.editHistory || [],
+        media: media
+      };
+  };
+
+  const loadPosts = async () => {
+    setLoading(true);
     try {
-      const allPosts = JSON.parse(localStorage.getItem('forum_posts') || '{}');
-      allPosts[event.id] = posts;
-      localStorage.setItem('forum_posts', JSON.stringify(allPosts));
-    } catch (e) {
-      console.error("Failed to save posts", e);
+      // Initial load: 5 posts
+      const response = await postService.getPostsByEvent(event.id, 0, 5, 'DISCUSSION');
+      
+      let rawPosts = [];
+      if (Array.isArray(response)) {
+        rawPosts = response;
+      } else if (response.content) {
+        rawPosts = response.content;
+      } else if (response._embedded && response._embedded.posts) {
+        rawPosts = response._embedded.posts;
+      } else if (response.posts) {
+        rawPosts = response.posts;
+      }
+
+      const mappedPosts = rawPosts.map(mapPost);
+      
+      // Sort: Pinned first, then newest (by ID)
+      mappedPosts.sort((a, b) => {
+          if (a.isPinned === b.isPinned) {
+             return b.id - a.id;
+          }
+          return a.isPinned ? -1 : 1;
+      });
+      
+      setPosts(mappedPosts);
+      setPage(1); // Next page for size 3 logic
+      setHasMore(rawPosts.length >= 5);
+    } catch (error) {
+      console.error("Failed to load posts", error);
+    } finally {
+      setLoading(false);
     }
-  }, [posts, event.id]);
+  };
+
+  const loadMorePosts = async () => {
+    setLoadingMore(true);
+    try {
+      // Subsequent loads: 3 posts
+      const response = await postService.getPostsByEvent(event.id, page, 3, 'DISCUSSION');
+      
+      let rawPosts = [];
+      if (Array.isArray(response)) {
+        rawPosts = response;
+      } else if (response.content) {
+        rawPosts = response.content;
+      } else if (response._embedded && response._embedded.posts) {
+        rawPosts = response._embedded.posts;
+      } else if (response.posts) {
+        rawPosts = response.posts;
+      }
+
+      if (rawPosts.length === 0) {
+        setHasMore(false);
+        setLoadingMore(false);
+        return;
+      }
+
+      const mappedPosts = rawPosts.map(mapPost);
+      
+      setPosts(prevPosts => {
+        // Filter duplicates
+        const existingIds = new Set(prevPosts.map(p => p.id));
+        const newPosts = mappedPosts.filter(p => !existingIds.has(p.id));
+        
+        if (newPosts.length === 0 && rawPosts.length > 0) {
+           // If we got posts but all were duplicates, we might need to fetch the next page immediately
+           // But for now, let's just increment page and let user scroll again or auto-trigger?
+           // Auto-triggering is safer to avoid "stuck" state.
+           // However, simple increment is enough for now.
+        }
+        
+        const combined = [...prevPosts, ...newPosts];
+        // Re-sort to ensure pinned stay on top if new pinned posts appear (unlikely but possible)
+        return combined.sort((a, b) => {
+            if (a.isPinned === b.isPinned) {
+               return b.id - a.id;
+            }
+            return a.isPinned ? -1 : 1;
+        });
+      });
+
+      setPage(prev => prev + 1);
+      // If we got less than requested, maybe no more? 
+      // But since we are doing overlap logic, we might get 3 items where 2 are dupes.
+      // So we only stop if rawPosts is empty or very small? 
+      // Standard Pageable returns empty content when out of bounds.
+      if (rawPosts.length < 3) setHasMore(false);
+
+    } catch (error) {
+      console.error("Failed to load more posts", error);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const [newPostContent, setNewPostContent] = useState('');
 
-  const handlePost = () => {
+  const handlePost = async () => {
     if (!newPostContent.trim()) return;
-    const newPost = {
-      id: Date.now(),
-      user: user ? (user.name || user.username) : 'Khách',
-      username: user ? user.username : 'guest',
-      role: user ? (user.role || 'Thành viên') : 'Thành viên',
-      time: 'Vừa xong',
-      content: newPostContent,
-      likes: 0,
-      comments: 0,
-      shares: 0,
-      liked: false,
-      commentsList: [],
-      isPinned: false,
-      isJoined: true,
-      editHistory: []
-    };
-    setPosts([newPost, ...posts]);
-    setNewPostContent('');
+    
+    try {
+      const postData = {
+        content: newPostContent,
+        eventId: event.id,
+        type: 'DISCUSSION'
+      };
+      const newPostResponse = await postService.createPost(event.id, postData);
+      setNewPostContent('');
+      
+      // Optimistically add or use response
+      if (newPostResponse && newPostResponse.id) {
+         const mappedPost = {
+            ...newPostResponse,
+            user: newPostResponse.authorName || (user ? (user.name || user.username) : 'Tôi'),
+            role: newPostResponse.role || (user ? user.role : 'Thành viên'),
+            time: 'Vừa xong',
+            likes: 0,
+            comments: 0,
+            shares: 0,
+            liked: false,
+            isPinned: false,
+            commentsList: [],
+            editHistory: []
+         };
+         setPosts(prev => {
+             const newPosts = [mappedPost, ...prev];
+             return newPosts.sort((a, b) => {
+                if (a.isPinned === b.isPinned) return b.id - a.id;
+                return a.isPinned ? -1 : 1;
+             });
+         });
+      } else {
+         loadPosts();
+      }
+    } catch (error) {
+      console.error("Failed to create post", error);
+      alert("Không thể đăng bài viết");
+    }
   };
 
-  const handleDeletePost = (postId) => {
+  const handleDeletePost = async (postId) => {
       if (window.confirm('Bạn có chắc chắn muốn xóa bài viết này?')) {
-          setPosts(posts.filter(p => p.id !== postId));
+          try {
+            await postService.deletePost(postId);
+            setPosts(posts.filter(p => p.id !== postId));
+          } catch (error) {
+            console.error("Failed to delete post", error);
+            alert("Không thể xóa bài viết");
+          }
       }
       setActiveMenuPostId(null);
   };
@@ -900,23 +1241,29 @@ const DiscussionTab = ({ event, user }) => {
       setActiveMenuPostId(null);
   };
 
-  const handleSaveEdit = (postId) => {
-      setPosts(posts.map(p => {
-          if (p.id === postId) {
-              const historyEntry = {
-                  content: p.content,
-                  time: new Date().toLocaleString('vi-VN')
-              };
-              return { 
-                  ...p, 
-                  content: editContent,
-                  editHistory: [historyEntry, ...(p.editHistory || [])]
-              };
-          }
-          return p;
-      }));
-      setEditingPostId(null);
-      setEditContent('');
+  const handleSaveEdit = async (postId) => {
+      try {
+        await postService.updatePost(postId, { content: editContent });
+        setPosts(posts.map(p => {
+            if (p.id === postId) {
+                const historyEntry = {
+                    content: p.content,
+                    time: new Date().toLocaleString('vi-VN')
+                };
+                return { 
+                    ...p, 
+                    content: editContent,
+                    editHistory: [historyEntry, ...(p.editHistory || [])]
+                };
+            }
+            return p;
+        }));
+        setEditingPostId(null);
+        setEditContent('');
+      } catch (error) {
+        console.error("Failed to update post", error);
+        alert("Không thể cập nhật bài viết");
+      }
   };
 
    const handleCancelEdit = () => {
@@ -924,32 +1271,58 @@ const DiscussionTab = ({ event, user }) => {
       setEditContent('');
   };
 
-  const handlePinPost = (postId) => {
-      setPosts(posts.map(p => {
-          if (p.id === postId) {
-              return { ...p, isPinned: !p.isPinned };
-          }
-          return p;
-      }));
-      setActiveMenuPostId(null);
+  const handlePinPost = async (postId) => {
+      const post = posts.find(p => p.id === postId);
+      if (!post) return;
+      
+      try {
+        await postService.updatePost(postId, { pinned: !post.isPinned });
+        setPosts(posts.map(p => {
+            if (p.id === postId) {
+                return { ...p, isPinned: !p.isPinned };
+            }
+            return p;
+        }));
+        setActiveMenuPostId(null);
+      } catch (error) {
+        console.error("Failed to pin post", error);
+        alert("Không thể ghim bài viết");
+      }
   };
 
-  const sortedPosts = [...posts].sort((a, b) => {
-      if (a.isPinned === b.isPinned) return 0;
-      return a.isPinned ? -1 : 1;
-  });
+  const sortedPosts = posts; // Already sorted
 
-  const handleLike = (postId) => {
-    setPosts(posts.map(post => {
-      if (post.id === postId) {
+  const handleLike = async (postId) => {
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+
+    // Optimistic update
+    const originalPosts = [...posts];
+    const newLiked = !post.liked;
+    const newLikes = newLiked ? (post.likes || 0) + 1 : Math.max(0, (post.likes || 0) - 1);
+
+    setPosts(posts.map(p => {
+      if (p.id === postId) {
         return {
-          ...post,
-          liked: !post.liked,
-          likes: post.liked ? post.likes - 1 : post.likes + 1
+          ...p,
+          liked: newLiked,
+          likes: newLikes
         };
       }
-      return post;
+      return p;
     }));
+
+    try {
+        if (newLiked) {
+            await postService.likePost(postId);
+        } else {
+            await postService.unlikePost(postId);
+        }
+    } catch (error) {
+        console.error("Failed to toggle like", error);
+        // Revert on error
+        setPosts(originalPosts);
+    }
   };
 
   const handleShare = (postId) => {
@@ -969,68 +1342,113 @@ const DiscussionTab = ({ event, user }) => {
     }));
   };
 
-  const handleComment = (postId, commentContent) => {
-      if (!commentContent.trim()) return;
-      
-      setPosts(posts.map(post => {
-          if (post.id === postId) {
-              // Check if replying to a comment
-              if (replyingTo && replyingTo.postId === postId) {
-                  const newReply = {
-                      id: Date.now(),
-                      user: 'Tôi',
-                      content: commentContent,
-                      time: 'Vừa xong',
-                      liked: false,
-                      likes: 0
-                  };
-                  
-                  return {
-                      ...post,
-                      comments: post.comments + 1,
-                      commentsList: post.commentsList.map(comment => {
-                          if (comment.id === replyingTo.commentId) {
-                              return {
-                                  ...comment,
-                                  replies: [...(comment.replies || []), newReply]
-                              };
-                          }
-                          // Check if replying to a reply (nested reply) - treat as reply to parent comment
-                          if (comment.replies && comment.replies.some(r => r.id === replyingTo.commentId)) {
-                              return {
-                                  ...comment,
-                                  replies: [...comment.replies, newReply]
-                              };
-                          }
-                          return comment;
-                      })
+  const toggleComments = async (postId) => {
+      const post = posts.find(p => p.id === postId);
+      if (!post) return;
+
+      if (post.commentsLoaded) {
+          setPosts(posts.map(p => {
+              if (p.id === postId) {
+                  return { ...p, showComments: !p.showComments };
+              }
+              return p;
+          }));
+          return;
+      }
+
+      try {
+          const response = await postService.getComments(postId);
+          const comments = response._embedded ? response._embedded.commentDtoList : (Array.isArray(response) ? response : []);
+          
+          const mappedComments = comments.map(c => ({
+              id: c.id,
+              user: c.authorName,
+              content: c.content,
+              time: new Date(c.createdAt).toLocaleString('vi-VN'),
+              liked: false,
+              likes: 0,
+              replies: c.replies ? c.replies.map(r => ({
+                  id: r.id,
+                  user: r.authorName,
+                  content: r.content,
+                  time: new Date(r.createdAt).toLocaleString('vi-VN'),
+                  liked: false,
+                  likes: 0
+              })) : []
+          }));
+
+          setPosts(posts.map(p => {
+              if (p.id === postId) {
+                  return { 
+                      ...p, 
+                      commentsList: mappedComments, 
+                      commentsLoaded: true,
+                      showComments: true
                   };
               }
+              return p;
+          }));
+      } catch (error) {
+          console.error("Failed to load comments", error);
+      }
+  };
 
-              return {
-                  ...post,
-                  comments: post.comments + 1,
-                  commentsList: [
-                      ...(post.commentsList || []),
-                      {
-                          id: Date.now(),
-                          user: 'Tôi',
-                          content: commentContent,
-                          time: 'Vừa xong',
-                          liked: false,
-                          likes: 0,
-                          replies: []
-                      }
-                  ]
-              };
-          }
-          return post;
-      }));
-      setReplyingTo(null);
+  const handleComment = async (postId, commentContent) => {
+      if (!commentContent.trim()) return;
       
-      // Reset placeholder
-      const input = document.getElementById(`comment-box-${postId}`);
-      if (input) input.placeholder = "Viết bình luận...";
+      try {
+          const parentId = replyingTo && replyingTo.postId === postId ? replyingTo.commentId : null;
+          const newComment = await postService.createComment(postId, commentContent, parentId);
+          
+          const mappedComment = {
+              id: newComment.id,
+              user: newComment.authorName || (user ? (user.name || user.username) : 'Tôi'),
+              content: newComment.content,
+              time: 'Vừa xong',
+              liked: false,
+              likes: 0,
+              replies: []
+          };
+
+          setPosts(posts.map(post => {
+              if (post.id === postId) {
+                  if (parentId) {
+                       const updatedComments = (post.commentsList || []).map(c => {
+                           if (c.id === parentId) {
+                               return { ...c, replies: [...(c.replies || []), mappedComment] };
+                           }
+                           if (c.replies && c.replies.some(r => r.id === parentId)) {
+                               return { ...c, replies: [...c.replies, mappedComment] };
+                           }
+                           return c;
+                       });
+                       return {
+                           ...post,
+                           comments: (post.comments || 0) + 1,
+                           commentsList: updatedComments
+                       };
+                  } else {
+                      return {
+                          ...post,
+                          comments: (post.comments || 0) + 1,
+                          commentsList: [...(post.commentsList || []), mappedComment],
+                          showComments: true
+                      };
+                  }
+              }
+              return post;
+          }));
+          
+          setReplyingTo(null);
+          const input = document.getElementById(`comment-box-${postId}`);
+          if (input) {
+              input.value = '';
+              input.placeholder = "Viết bình luận...";
+          }
+      } catch (error) {
+          console.error("Failed to post comment", error);
+          alert("Không thể gửi bình luận");
+      }
   };
 
   const handleCommentLike = (postId, commentId, isReply = false, parentCommentId = null) => {
@@ -1112,6 +1530,13 @@ const DiscussionTab = ({ event, user }) => {
       </div>
 
       {/* Posts Feed */}
+      {loading && <div className="text-center py-3"><div className="spinner-border text-primary" role="status"><span className="sr-only">Loading...</span></div></div>}
+      {!loading && sortedPosts.length === 0 && (
+          <div className="text-center py-5 text-muted">
+              <FontAwesomeIcon icon={faComment} size="3x" className="mb-3 text-light" />
+              <p>Chưa có bài viết nào. Hãy là người đầu tiên đăng bài!</p>
+          </div>
+      )}
       {sortedPosts.map(post => (
         <div key={post.id} className={`bg-white rounded shadow-sm mb-3 ${post.isPinned ? 'border border-primary' : ''}`}>
             <div className="p-3">
@@ -1152,7 +1577,7 @@ const DiscussionTab = ({ event, user }) => {
                         </button>
                         {activeMenuPostId === post.id && (
                             <div className="position-absolute bg-white shadow-sm rounded border py-1" style={{ right: 0, top: '100%', zIndex: 100, minWidth: '180px' }}>
-                                {(user && (user.role === 'Quản trị viên' || user.role === 'Quản lý sự kiện' || user.role === 'ADMIN' || user.role === 'EVENT_MANAGER')) && (
+                                {canManagePosts && (
                                     <button 
                                         className="dropdown-item small" 
                                         onClick={() => handlePinPost(post.id)}
@@ -1171,7 +1596,7 @@ const DiscussionTab = ({ event, user }) => {
                                         <FontAwesomeIcon icon={faHistory} className="mr-2" /> Xem lịch sử chỉnh sửa
                                     </button>
                                 )}
-                                {(user && (user.username === post.username)) && (
+                                {(user && (user.id == post.authorId || (post.username && user.username === post.username))) && (
                                     <button 
                                         className="dropdown-item small" 
                                         onClick={() => handleEditPost(post)}
@@ -1179,7 +1604,7 @@ const DiscussionTab = ({ event, user }) => {
                                         <FontAwesomeIcon icon={faEdit} className="mr-2" /> Sửa bài viết
                                     </button>
                                 )}
-                                {(user && (user.username === post.username || getRoleLevel(user.role) > getRoleLevel(post.role))) && (
+                                {(user && (user.id == post.authorId || (post.username && user.username === post.username) || canManagePosts)) && (
                                     <button 
                                         className="dropdown-item text-danger small" 
                                         onClick={() => handleDeletePost(post.id)}
@@ -1206,7 +1631,23 @@ const DiscussionTab = ({ event, user }) => {
                             </div>
                         </div>
                     ) : (
-                        post.content
+                        <>
+                            <p className="mb-2" style={{ whiteSpace: 'pre-wrap' }}>{post.content}</p>
+                            {post.media && post.media.length > 0 && (
+                                <div className="row no-gutters">
+                                    {post.media.map((url, idx) => (
+                                        <div key={idx} className={`col-${post.media.length === 1 ? '12' : '6'} p-1`}>
+                                            <img 
+                                                src={url.startsWith('http') ? url : `${API_BASE_URL.replace('/api', '')}${url}`} 
+                                                alt="Post media" 
+                                                className="img-fluid rounded" 
+                                                style={{ maxHeight: '300px', width: '100%', objectFit: 'cover' }}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             </div>
@@ -1234,6 +1675,7 @@ const DiscussionTab = ({ event, user }) => {
                 <button 
                     className="btn btn-light flex-grow-1 text-secondary"
                     onClick={() => {
+                        if (!post.showComments) toggleComments(post.id);
                         const commentBox = document.getElementById(`comment-box-${post.id}`);
                         if (commentBox) commentBox.focus();
                     }}
@@ -1250,7 +1692,15 @@ const DiscussionTab = ({ event, user }) => {
             
             {/* Comment Section */}
             <div className="p-3 border-top">
-                {post.commentsList && post.commentsList.map(comment => (
+                {post.comments > 0 && !post.showComments && (
+                    <button 
+                        className="btn btn-link text-muted p-0 mb-2"
+                        onClick={() => toggleComments(post.id)}
+                    >
+                        Xem {post.comments} bình luận
+                    </button>
+                )}
+                {post.showComments && post.commentsList && post.commentsList.map(comment => (
                     <div key={comment.id}>
                         <div className="d-flex mb-2">
                             <div className="bg-light rounded-circle d-flex align-items-center justify-content-center mr-2" style={{ width: '32px', height: '32px', minWidth: '32px' }}>
@@ -1348,6 +1798,14 @@ const DiscussionTab = ({ event, user }) => {
             </div>
         </div>
       ))}
+      {loadingMore && (
+          <div className="text-center py-3">
+              <div className="spinner-border text-primary spinner-border-sm" role="status">
+                  <span className="sr-only">Loading...</span>
+              </div>
+              <span className="ml-2 text-muted small">Đang tải thêm...</span>
+          </div>
+      )}
       {/* Edit History Modal */}
       <EditHistoryModal 
           isOpen={!!viewingHistoryPostId}
@@ -1358,181 +1816,231 @@ const DiscussionTab = ({ event, user }) => {
   );
 };
 
+const NotificationsTab = ({ event, user }) => {
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [newContent, setNewContent] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+
+  // Permission: Only Managers/Admins can create announcements
+  const canCreate = user && (user.role === 'ADMIN' || user.role === 'Quản trị viên' || user.username === event.username || user.id === event.ownerId);
+
+  useEffect(() => {
+    loadPosts();
+  }, [event.id]);
+
+  const loadPosts = async () => {
+    setLoading(true);
+    try {
+      const response = await postService.getPostsByEvent(event.id, 0, 20, 'ANNOUNCEMENT');
+      let rawPosts = [];
+      if (Array.isArray(response)) rawPosts = response;
+      else if (response.content) rawPosts = response.content;
+      else if (response._embedded && response._embedded.posts) rawPosts = response._embedded.posts;
+      
+      setPosts(rawPosts);
+    } catch (error) {
+      console.error("Failed to load announcements", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreate = async () => {
+    if (!newContent.trim()) return;
+    try {
+      await postService.createPost(event.id, {
+        content: newContent,
+        type: 'ANNOUNCEMENT'
+      });
+      setNewContent('');
+      setIsCreating(false);
+      loadPosts();
+    } catch (error) {
+      alert("Failed to create announcement");
+    }
+  };
+
+  const handleDelete = async (id) => {
+      if(!window.confirm("Bạn có chắc chắn muốn xóa thông báo này?")) return;
+      try {
+          await postService.deletePost(id);
+          loadPosts();
+      } catch(e) {
+          alert("Failed to delete");
+      }
+  }
+
+  return (
+    <div className='p-4 bg-white rounded shadow-sm'>
+        <div className='mb-4'>
+            <div className="d-flex justify-content-between align-items-center">
+                <h6 className='text-muted mb-0'>
+                    <FontAwesomeIcon icon={faBell} className="mr-2" />
+                    Bảng tin theo dõi
+                </h6>
+                {canCreate && (
+                    <button 
+                        className={`btn btn-sm ${isCreating ? 'btn-outline-danger' : 'btn-outline-primary'}`}
+                        onClick={() => setIsCreating(!isCreating)}
+                    >
+                        {isCreating ? 'Hủy' : 'Tạo thông báo'}
+                    </button>
+                )}
+            </div>
+        </div>
+
+        {isCreating && (
+            <div className="mb-4 p-3 bg-light rounded">
+                <h6 className="text-muted mb-2 small font-weight-bold">Tạo thông báo mới</h6>
+                <div className="form-group mb-3">
+                    <textarea 
+                        className="form-control border-0 shadow-sm" 
+                        rows="3"
+                        placeholder="Nhập nội dung..." 
+                        value={newContent}
+                        onChange={(e) => setNewContent(e.target.value)}
+                        autoFocus
+                        style={{ resize: 'none' }}
+                    />
+                </div>
+                <div className="d-flex justify-content-end">
+                    <button 
+                        className="btn btn-sm btn-primary px-3" 
+                        onClick={handleCreate}
+                        disabled={!newContent.trim()}
+                    >
+                        Đăng
+                    </button>
+                </div>
+            </div>
+        )}
+
+        {loading ? (
+            <div className="text-center py-5"><div className="spinner-border text-primary" /></div>
+        ) : posts.length === 0 ? (
+            <div className="text-center text-muted py-5">
+                <FontAwesomeIcon icon={faBell} size="2x" className="mb-3 text-secondary" style={{ opacity: 0.3 }} />
+                <p className="mb-0">Chưa có thông báo nào</p>
+            </div>
+        ) : (
+            <div>
+                {posts.map((item) => (
+                    <div key={item.id} className="mb-3 pb-3 border-bottom">
+                        <div className="d-flex align-items-center mb-2 justify-content-between">
+                            <div className="d-flex align-items-center">
+                                <div className="bg-light rounded-circle d-flex align-items-center justify-content-center mr-2" style={{ width: '36px', height: '36px' }}>
+                                    <FontAwesomeIcon icon={faUser} className="text-secondary" />
+                                </div>
+                                <div>
+                                    <div className="font-weight-bold small">
+                                        {item.authorName || item.authorId}
+                                    </div>
+                                    <div className="d-flex align-items-center">
+                                        <span className="badge badge-danger mr-2" style={{fontSize: '0.7rem'}}>
+                                            {item.authorRole || 'Quản trị viên'}
+                                        </span>
+                                        <small className="text-muted">{formatDateTime(item.createdAt)}</small>
+                                    </div>
+                                </div>
+                            </div>
+                            {canCreate && (
+                                <button 
+                                    className="btn btn-link text-danger p-0"
+                                    onClick={() => handleDelete(item.id)}
+                                    title="Xóa"
+                                >
+                                    <FontAwesomeIcon icon={faTrashAlt} size="sm" />
+                                </button>
+                            )}
+                        </div>
+                        <p className="mb-0 text-dark mt-2 pl-1" style={{ whiteSpace: 'pre-wrap' }}>
+                            {item.content}
+                        </p>
+                    </div>
+                ))}
+            </div>
+        )}
+    </div>
+  );
+};
+
 const EventChannelDashboard = ({ event, onClose }) => {
+      useEffect(() => {
+        if (event && event.id) {
+          setLoading(true);
+          setError(null);
+          eventService.getEvent(event.id)
+            .then((data) => setEventDetail(data))
+            .catch(() => setError('Không thể tải chi tiết sự kiện'))
+            .finally(() => setLoading(false));
+        }
+      }, [event]);
+    const [showEndConfirm, setShowEndConfirm] = useState(false);
+    const [members, setMembers] = useState(event.members || []);
+    const [eventDetail, setEventDetail] = useState(event);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const handleEndEvent = () => setShowEndConfirm(true);
+    const handleConfirmEndEvent = async () => {
+      try {
+        await eventService.updateEvent(event.id, { status: 'COMPLETED' });
+        setEventDetail(prev => ({ ...prev, status: 'COMPLETED' }));
+        setMembers(members.map(m => ({ ...m, status: 'COMPLETED' })));
+        setShowEndConfirm(false);
+      } catch (e) {
+        alert('Không thể kết thúc sự kiện: ' + (e.message || e));
+      }
+    };
+    const handleCancelEndEvent = () => setShowEndConfirm(false);
   const { user: authUser } = useAuth();
   // Ensure user has a role for testing purposes (Default to 'Quản trị viên' if missing)
   const user = authUser ? { ...authUser, role: authUser.role || 'Quản trị viên' } : null;
   
   const [activeTab, setActiveTab] = useState('details');
-  const [followItems, setFollowItems] = useState([]);
-  const [isCreatingFollow, setIsCreatingFollow] = useState(false);
-  const [followText, setFollowText] = useState('');
-  const [editingFollowId, setEditingFollowId] = useState(null);
-  const [editFollowContent, setEditFollowContent] = useState('');
-
-  const handleAddFollowItem = () => {
-    if (followText.trim()) {
-      setFollowItems([{ 
-        id: Date.now(), 
-        content: followText, 
-        time: new Date().toLocaleString('vi-VN'),
-        user: user ? (user.name || user.username) : 'Admin',
-        username: user ? user.username : 'admin',
-        role: user ? (user.role || 'Quản trị viên') : 'Quản trị viên'
-      }, ...followItems]);
-      setFollowText('');
-      setIsCreatingFollow(false);
-    }
-  };
-
-  const handleDeleteFollowItem = (id) => {
-      if (window.confirm('Bạn có chắc chắn muốn xóa thông báo này?')) {
-          setFollowItems(followItems.filter(item => item.id !== id));
-      }
-  };
-
-  const handleEditFollowItem = (item) => {
-      setEditingFollowId(item.id);
-      setEditFollowContent(item.content);
-  };
-
-  const handleSaveEditFollowItem = (id) => {
-      setFollowItems(followItems.map(item => {
-          if (item.id === id) {
-              return { ...item, content: editFollowContent };
-          }
-          return item;
-      }));
-      setEditingFollowId(null);
-      setEditFollowContent('');
-  };
-
-  const handleCancelEditFollowItem = () => {
-      setEditingFollowId(null);
-      setEditFollowContent('');
-  };
 
   const renderContent = () => {
+    if (loading) return <div>Đang tải chi tiết sự kiện...</div>;
+    if (error) return <div className="text-danger">{error}</div>;
     switch (activeTab) {
       case 'details':
-        return <EventDetails event={event} user={user} />;
-      case 'discussion':
-        return <DiscussionTab event={event} user={user} />;
-      case 'members':
-        return <MembersList />;
-      case 'notifications':
         return (
-          <div className='p-4 bg-white rounded shadow-sm'>
-            <div className='mb-4'>
-                <div className="d-flex justify-content-between align-items-center">
-                    <h6 className='text-muted mb-0'>
-                        <FontAwesomeIcon icon={faBell} className="mr-2" />
-                        Bảng tin theo dõi
-                    </h6>
-                    {(user && getRoleLevel(user.role) >= 2) && (
-                        <button 
-                            className={`btn btn-sm ${isCreatingFollow ? 'btn-outline-danger' : 'btn-outline-primary'}`}
-                            onClick={() => setIsCreatingFollow(!isCreatingFollow)}
-                        >
-                            {isCreatingFollow ? 'Hủy' : 'Tạo thông báo'}
-                        </button>
-                    )}
-                </div>
+          <div className="d-flex flex-column" style={{ minHeight: '100%' }}>
+            <EventDetails event={eventDetail} user={user} onEventUpdate={setEventDetail} />
+            {(user && user.username === eventDetail.username && eventDetail.status === 'APPROVED') && (
+            <div className="text-center py-4 my-auto">
+              <button className="btn btn-danger" onClick={handleEndEvent}>
+                Kết thúc sự kiện
+              </button>
             </div>
-
-            {isCreatingFollow && (
-                <div className="mb-4 p-3 bg-light rounded">
-                    <h6 className="text-muted mb-2 small font-weight-bold">Tạo thông báo mới</h6>
-                    <div className="form-group mb-3">
-                        <textarea 
-                            className="form-control border-0 shadow-sm" 
-                            rows="3"
-                            placeholder="Nhập nội dung..." 
-                            value={followText}
-                            onChange={(e) => setFollowText(e.target.value)}
-                            autoFocus
-                            style={{ resize: 'none' }}
-                        />
-                    </div>
-                    <div className="d-flex justify-content-end">
-                        <button 
-                            className="btn btn-sm btn-primary px-3" 
-                            onClick={handleAddFollowItem}
-                            disabled={!followText.trim()}
-                        >
-                            Đăng
-                        </button>
-                    </div>
-                </div>
             )}
-
-            {followItems.length === 0 ? (
-                <div className="text-center text-muted py-5">
-                    <FontAwesomeIcon icon={faBell} size="2x" className="mb-3 text-secondary" style={{ opacity: 0.3 }} />
-                    <p className="mb-0">Chưa có thông báo nào</p>
+            {showEndConfirm && (
+              <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.3)' }} tabIndex="-1">
+                <div className="modal-dialog modal-dialog-centered">
+                  <div className="modal-content">
+                    <div className="modal-header">
+                      <h5 className="modal-title">Xác nhận kết thúc sự kiện</h5>
+                      <button type="button" className="close" onClick={handleCancelEndEvent}>&times;</button>
+                    </div>
+                    <div className="modal-body">
+                      <p>Bạn có chắc chắn muốn kết thúc sự kiện này? Tất cả thành viên sẽ được đánh dấu hoàn thành.</p>
+                    </div>
+                    <div className="modal-footer">
+                      <button className="btn btn-secondary" onClick={handleCancelEndEvent}>Hủy</button>
+                      <button className="btn btn-danger" onClick={handleConfirmEndEvent}>Xác nhận</button>
+                    </div>
+                  </div>
                 </div>
-            ) : (
-                <div>
-                    {followItems.map((item, index) => (
-                        <div key={item.id} className={`mb-3 pb-3 ${index !== followItems.length - 1 ? 'border-bottom' : ''}`}>
-                            <div className="d-flex align-items-center mb-2 justify-content-between">
-                                <div className="d-flex align-items-center">
-                                    <div className="bg-light rounded-circle d-flex align-items-center justify-content-center mr-2" style={{ width: '36px', height: '36px' }}>
-                                        <FontAwesomeIcon icon={faUser} className="text-secondary" />
-                                    </div>
-                                    <div>
-                                        <div className="font-weight-bold small">
-                                            {item.user} <span className="text-muted font-weight-normal">(@{item.username})</span>
-                                        </div>
-                                        <div className="d-flex align-items-center">
-                                            <span className={`badge ${getRoleBadgeClass(item.role)} mr-2`} style={{fontSize: '0.7rem'}}>{item.role}</span>
-                                            <small className="text-muted">{item.time}</small>
-                                        </div>
-                                    </div>
-                                </div>
-                                {(user && getRoleLevel(user.role) >= 2) && (
-                                    <div>
-                                        <button 
-                                            className="btn btn-link text-secondary p-0 mr-2"
-                                            onClick={() => handleEditFollowItem(item)}
-                                            title="Sửa"
-                                        >
-                                            <FontAwesomeIcon icon={faEdit} size="sm" />
-                                        </button>
-                                        <button 
-                                            className="btn btn-link text-danger p-0"
-                                            onClick={() => handleDeleteFollowItem(item.id)}
-                                            title="Xóa"
-                                        >
-                                            <FontAwesomeIcon icon={faTrashAlt} size="sm" />
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                            {editingFollowId === item.id ? (
-                                <div className="mt-2">
-                                    <textarea 
-                                        className="form-control mb-2" 
-                                        value={editFollowContent}
-                                        onChange={(e) => setEditFollowContent(e.target.value)}
-                                        rows="3"
-                                    />
-                                    <div className="d-flex justify-content-end">
-                                        <button className="btn btn-sm btn-secondary mr-2" onClick={handleCancelEditFollowItem}>Hủy</button>
-                                        <button className="btn btn-sm btn-primary" onClick={() => handleSaveEditFollowItem(item.id)}>Lưu</button>
-                                    </div>
-                                </div>
-                            ) : (
-                                <p className="mb-0 text-dark mt-2 pl-1" style={{ whiteSpace: 'pre-wrap' }}>
-                                    {item.content}
-                                </p>
-                            )}
-                        </div>
-                    ))}
-                </div>
+              </div>
             )}
           </div>
         );
+      case 'discussion':
+        return <DiscussionTab event={eventDetail} user={user} />;
+      case 'members':
+        return <MembersList event={eventDetail} user={user} />;
+      case 'notifications':
+        return <NotificationsTab event={eventDetail} user={user} />;
       case 'schedule':
         return (
           <div className='p-4'>
@@ -1560,7 +2068,11 @@ const EventChannelDashboard = ({ event, onClose }) => {
       </div>
       <div className='event-channel-body'>
         <div className='event-channel-sidebar'>
-          <EventChannelSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+          <EventChannelSidebar 
+            activeTab={activeTab} 
+            setActiveTab={setActiveTab} 
+            eventStatus={eventDetail.status}
+          />
         </div>
         <div className='event-channel-content'>
           {renderContent()}

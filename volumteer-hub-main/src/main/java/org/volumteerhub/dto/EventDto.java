@@ -24,6 +24,7 @@ public class EventDto {
     private String name;
 
     private String description;
+    private String location;
 
     @NotNull(groups = OnCreate.class)
     private Instant dateDeadline;
@@ -35,8 +36,13 @@ public class EventDto {
     private Instant endDate;
 
     private UUID ownerId;
+    private String username;
 
     @Enumerated(EnumType.STRING)
     private EventStatus status;
+
+    private Instant createdAt;
+
+    private long registeredCount;
 }
 

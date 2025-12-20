@@ -8,6 +8,7 @@ import {
   faSignOutAlt,
   faUsers,
   faCalendarAlt,
+  faClipboardList,
 } from '@fortawesome/free-solid-svg-icons';
 
 const Sidebar = () => {
@@ -28,6 +29,11 @@ const Sidebar = () => {
         <li>
           <Link to='/admin/users' className='text-dark'>
             <FontAwesomeIcon icon={faUsers} /> <span>Quản lý người dùng</span>
+          </Link>
+        </li>
+        <li>
+          <Link to='/admin/registrations' className='text-dark'>
+            <FontAwesomeIcon icon={faClipboardList} /> <span>Danh sách đăng ký</span>
           </Link>
         </li>
       </ul>

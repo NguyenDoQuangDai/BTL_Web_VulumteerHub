@@ -1,0 +1,136 @@
+.manage-users-wrapper {
+  padding: 24px;
+  background-color: #f4f7fc;
+  min-height: 100vh;
+}
+
+.manage-users-card {
+  background-color: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.manage-users-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.manage-users-filters {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 20px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background-color: white;
+  padding: 10px 0;
+}
+
+.manage-users-table thead th {
+  background-color: #f8f9fa;
+  border-bottom: 2px solid #dee2e6;
+  color: #495057;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.manage-users-table tbody td {
+  vertical-align: middle;
+  color: #212529;
+}
+
+.user-status-badge {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.user-status-badge.active {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.user-status-badge.locked {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.role-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.role-badge.admin {
+  background-color: #cce5ff;
+  color: #004085;
+}
+
+.role-badge.manager {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.role-badge.user {
+  background-color: #e2e3e5;
+  color: #383d41;
+}
+
+.action-btn {
+  margin-right: 5px;
+  padding: 4px 8px;
+  font-size: 0.875rem;
+}
+
+.bulk-actions-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: white;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  padding: 15px 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 1000;
+  border-top: 1px solid #dee2e6;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.confirm-card {
+  background-color: white;
+  padding: 24px;
+  border-radius: 8px;
+  min-width: 350px;
+  max-width: 500px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}

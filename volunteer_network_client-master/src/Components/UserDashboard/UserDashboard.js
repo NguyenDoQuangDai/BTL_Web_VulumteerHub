@@ -1,11 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
 import EventCard from './EventCard';
-import { sampleEvents } from './sampleData';
 import { useAuth } from '../../contexts/AuthContext';
 import UsersTasks from './UsersTasks';
 import './UserDashboard.css';
 import PreLoader from '../PreLoader/PreLoader';
-import { registrationService } from '../../services/apiService';
+import { registrationService, eventService, userService } from '../../services/apiService';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEdit, faCamera, faTimes } from '@fortawesome/free-solid-svg-icons';
 
@@ -14,22 +13,41 @@ const UserDashboard = () => {
   const [userRegistrations, setUserRegistrations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [registeredIds, setRegisteredIds] = useState(new Set());
-  const [interestedIds, setInterestedIds] = useState(new Set());
   const [createdEvents, setCreatedEvents] = useState([]);
   
   // Edit Profile State
   const [showEditProfile, setShowEditProfile] = useState(false);
-  const [editName, setEditName] = useState('');
+  const [editFirstname, setEditFirstname] = useState('');
+  const [editLastname, setEditLastname] = useState('');
   const [editAvatar, setEditAvatar] = useState('');
   const fileInputRef = useRef(null);
 
   // Auth context
   const { user, isAuthenticated, updateUser } = useAuth();
+  const [currentUser, setCurrentUser] = useState(user);
+
+  useEffect(() => {
+      if (user) {
+          setCurrentUser(user);
+          // Fetch latest user data
+          const fetchUserData = async () => {
+              try {
+                  const userData = await userService.getUser(user.id);
+                  setCurrentUser(prev => ({ ...prev, ...userData }));
+                  // Optionally update global auth context if needed, but local state is safer for now
+                  // updateUser(userData); 
+              } catch (e) {
+                  console.error("Failed to fetch latest user data", e);
+              }
+          };
+          fetchUserData();
+      }
+  }, [user]);
 
   const handleEditClick = () => {
-    setEditName(user.fullName || user.username || '');
-    setEditAvatar(user.avatar || '');
+    setEditFirstname(currentUser.firstname || '');
+    setEditLastname(currentUser.lastname || '');
+    setEditAvatar(currentUser.avatar || '');
     setShowEditProfile(true);
   };
 
@@ -44,14 +62,30 @@ const UserDashboard = () => {
     }
   };
 
-  const handleSaveProfile = () => {
-    const updatedUser = {
-      ...user,
-      fullName: editName,
-      avatar: editAvatar
-    };
-    updateUser(updatedUser);
-    setShowEditProfile(false);
+  const handleSaveProfile = async () => {
+    try {
+        const updateData = {
+            firstname: editFirstname,
+            lastname: editLastname,
+            avatar: editAvatar
+        };
+
+        const updatedUser = await userService.updateUser(currentUser.id, updateData);
+        
+        // Map backend response to frontend user object structure if needed
+        const userForContext = {
+            ...currentUser,
+            ...updatedUser,
+            fullName: `${updatedUser.firstname} ${updatedUser.lastname}`.trim()
+        };
+
+        updateUser(userForContext);
+        setCurrentUser(userForContext);
+        setShowEditProfile(false);
+    } catch (err) {
+        console.error("Failed to update profile", err);
+        alert("Failed to update profile. Please try again.");
+    }
   };
 
   // Fetch user's registrations from API:
@@ -62,7 +96,9 @@ const UserDashboard = () => {
       try {
         setLoading(true);
         const registrations = await registrationService.getUserRegistrations();
-        setUserRegistrations(registrations);
+        // Filter only approved registrations
+        const approvedRegistrations = registrations.filter(reg => reg.status === 'APPROVED' || reg.status === 'COMPLETED');
+        setUserRegistrations(approvedRegistrations);
         setError(null);
       } catch (err) {
         console.error('Error fetching user registrations:', err);
@@ -75,64 +111,41 @@ const UserDashboard = () => {
     fetchUserRegistrations();
   }, [isAuthenticated]);
 
-  // Load registered events from localStorage (frontend-only)
+  // Load created events from API
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('registeredEvents');
-      const ids = raw ? new Set(JSON.parse(raw)) : new Set();
-      setRegisteredIds(ids);
-    } catch {
-      setRegisteredIds(new Set());
-    }
-  }, []);
-
-  // Load interested events from localStorage (frontend-only)
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem('interestedEvents');
-      const ids = raw ? new Set(JSON.parse(raw)) : new Set();
-      setInterestedIds(ids);
-    } catch {
-      setInterestedIds(new Set());
-    }
-  }, []);
-
-  // Load created events from localStorage
-  useEffect(() => {
-    const loadCreatedEvents = () => {
-      if (!user) return;
+    const loadCreatedEvents = async () => {
+      if (!currentUser || !currentUser.id) return;
       try {
-        const storedMockEvents = localStorage.getItem('mockEvents');
-        if (storedMockEvents) {
-          const parsedMockEvents = JSON.parse(storedMockEvents);
-          // Filter events created by current user
-          const myEvents = parsedMockEvents.filter(evt => 
-            evt.owner === user.username || evt.username === user.username
-          );
-          setCreatedEvents(myEvents);
-        } else {
-          setCreatedEvents([]);
+        // Fetch events where ownerId matches current user
+        // Pass ownerId as the 6th argument (page, size, status, search, sort, ownerId)
+        const response = await eventService.getEvents(0, 100, null, null, null, currentUser.id);
+        
+        let myEvents = [];
+        if (response && response.events) {
+            myEvents = response.events;
         }
+
+        setCreatedEvents(myEvents);
       } catch (err) {
-        console.error("Error parsing mockEvents:", err);
+        console.error("Error loading created events:", err);
       }
     };
 
     loadCreatedEvents();
-
-    // Listen for storage changes (cross-tab or manual dispatch)
-    const handleStorageChange = () => loadCreatedEvents();
-    window.addEventListener('storage', handleStorageChange);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-    };
-  }, [user]);
+  }, [currentUser]);
 
   // Handle registration cancellation
-  const handleCancelRegistration = (registrationId) => {
-    // Remove from local state immediately for better UX
-    setUserRegistrations(prev => prev.filter(reg => reg.id !== registrationId));
+  const handleCancelRegistration = async (eventId) => {
+    if (window.confirm('Bạn có chắc chắn muốn hủy đăng ký sự kiện này?')) {
+        try {
+            await registrationService.cancelRegistration(eventId);
+            // Remove from local state immediately for better UX
+            setUserRegistrations(prev => prev.filter(reg => reg.eventId !== eventId));
+        } catch (err) {
+            console.error("Failed to cancel registration", err);
+            alert("Không thể hủy đăng ký. Vui lòng thử lại sau.");
+        }
+    }
   };
 
   if (!isAuthenticated) {
@@ -157,8 +170,12 @@ const UserDashboard = () => {
 
   return (
     <div className='container mt-5'>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h4>Trang cá nhân</h4>
+      </div>
+
       {/* User Profile Section */}
-      {user && (
+      {currentUser && (
         <div className="user-profile-card position-relative">
           <button 
             className="btn btn-light btn-sm position-absolute" 
@@ -169,30 +186,34 @@ const UserDashboard = () => {
             <FontAwesomeIcon icon={faEdit} />
           </button>
           <img 
-            src={user.avatar || "https://i.imgur.com/HeIi0wU.png"} 
+            src={currentUser.avatar || "https://i.imgur.com/HeIi0wU.png"} 
             alt="User Avatar" 
             className="user-avatar"
             onError={(e) => {e.target.onerror = null; e.target.src="https://i.imgur.com/HeIi0wU.png"}}
           />
           <div className="user-info">
-            <h4 className="mb-1">{user.fullName || user.username}</h4>
-            <span className="user-username d-block mb-4">@{user.username}</span>
+            <h4 className="mb-1">
+              {currentUser.lastname && currentUser.firstname 
+                ? `${currentUser.lastname} ${currentUser.firstname}` 
+                : (currentUser.fullName || currentUser.username)}
+            </h4>
+            <span className="user-username d-block mb-4">@{currentUser.username}</span>
             
             <div className="row">
               <div className="col-md-6">
                 <div className="user-details-grid">
                   {/* <div className="detail-item">
                     <span className="detail-label">ID:</span>
-                    <span className="detail-value">#{user.id || user._id || '---'}</span>
+                    <span className="detail-value">#{currentUser.id || currentUser._id || '---'}</span>
                   </div> */}
                   <div className="detail-item">
                     <span className="detail-label">Email:</span>
-                    <span className="detail-value">{user.email || '---'}</span>
+                    <span className="detail-value">{currentUser.email || '---'}</span>
                   </div>
                   <div className="detail-item">
                     <span className="detail-label">Ngày tham gia:</span>
                     <span className="detail-value">
-                      {user.createdAt ? new Date(user.createdAt).toLocaleDateString('vi-VN') : new Date().toLocaleDateString('vi-VN')}
+                      {currentUser.createdAt ? new Date(currentUser.createdAt).toLocaleDateString('vi-VN') : new Date().toLocaleDateString('vi-VN')}
                     </span>
                   </div>
                 </div>
@@ -206,8 +227,12 @@ const UserDashboard = () => {
                   </div>
                   <div className="detail-item">
                     <span className="detail-label">Vai trò:</span>
-                    <span className="user-role-badge">
-                      {user.role || 'Tình nguyện viên'}
+                    <span className={`badge ${
+                      (currentUser.role === 'ADMIN' || currentUser.role === 'Quản trị viên') 
+                        ? 'badge-danger' 
+                        : 'badge-primary'
+                    } status-badge`}>
+                      {currentUser.role || 'Tình nguyện viên'}
                     </span>
                   </div>
                 </div>
@@ -217,101 +242,63 @@ const UserDashboard = () => {
         </div>
       )}
 
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h4>My Volunteer Dashboard</h4>
-      </div>
-
       {/* Created Events Section */}
-      {createdEvents.length > 0 && (
-        <>
-          <h5 className='mb-4'>
-            Sự kiện đã tạo ({createdEvents.length})
-          </h5>
-          <div className='row mb-5'>
-            {createdEvents.map(evt => (
-              <div key={evt.id} className="col-12 col-sm-6 col-md-4 mb-4">
-                <EventCard evt={evt} />
-              </div>
-            ))}
-          </div>
-          <hr />
-        </>
-      )}
-
       <h5 className='mb-4'>
-        You've registered for {registeredIds.size} event{registeredIds.size !== 1 ? 's' : ''}
+        Sự kiện đã tạo ({createdEvents.length})
       </h5>
-      <div className='row'>
-        {registeredIds.size > 0 ? (
-          sampleEvents
-            .filter(evt => registeredIds.has(evt.id))
-            .map(evt => (
-              <div key={evt.id} className="col-12 col-sm-6 col-md-4 mb-4">
-                <EventCard evt={evt} />
-              </div>
-            ))
+      <div className='row mb-5'>
+        {createdEvents.length > 0 ? (
+          createdEvents.map(evt => (
+            <div key={evt.id} className="col-12 col-sm-6 col-md-4 mb-4">
+              <EventCard evt={evt} />
+            </div>
+          ))
         ) : (
           <div className="col-12 text-center">
-            <div className="alert alert-info">
-              <h5>No registrations found</h5>
-              <p>You haven't registered for any volunteer events yet.</p>
-              <a href="/events" className="btn btn-primary">
-                Browse Available Events
+            <div className="alert alert-light border">
+              <h5>Chưa có sự kiện nào</h5>
+              <p>Bạn chưa tạo sự kiện tình nguyện nào.</p>
+              <a href="/events" className="btn btn-outline-primary">
+                Tạo sự kiện mới
               </a>
             </div>
           </div>
         )}
       </div>
+      <hr />
 
-      <h5 className='mt-4 mb-3'>
-        You're interested in {interestedIds.size} event{interestedIds.size !== 1 ? 's' : ''}
+      <h5 className='mb-4'>
+        Sự kiện đã đăng ký ({userRegistrations.length})
       </h5>
       <div className='row'>
-        {interestedIds.size > 0 ? (
-          sampleEvents
-            .filter(evt => interestedIds.has(evt.id))
-            .map(evt => (
-              <div key={evt.id} className="col-12 col-sm-6 col-md-4 mb-4">
-                <EventCard evt={evt} />
-              </div>
-            ))
+        {userRegistrations.length > 0 ? (
+          userRegistrations.map(reg => (
+            <div key={reg.id} className="col-12 col-sm-6 col-md-4 mb-4">
+              {reg.event ? (
+                  <EventCard evt={reg.event} />
+              ) : (
+                  <UsersTasks
+                    registration={reg}
+                    onCancel={handleCancelRegistration}
+                  />
+              )}
+            </div>
+          ))
         ) : (
           <div className="col-12 text-center">
-            <div className="alert alert-info">
-              <h5>No interested events</h5>
-              <p>Mark events as interested from the Events tab.</p>
-              <a href="/events" className="btn btn-primary">
-                Go to Events
+            <div className="alert alert-light border">
+              <h5>Chưa đăng ký sự kiện nào</h5>
+              <p>Bạn chưa đăng ký tham gia sự kiện tình nguyện nào.</p>
+              <a href="/events" className="btn btn-outline-primary">
+                Tìm sự kiện
               </a>
             </div>
           </div>
         )}
       </div>
       
-      <div className='row'>
-        {userRegistrations.length > 0 ? (
-          userRegistrations.map((registration) => (
-            <UsersTasks
-              key={registration.id}
-              registration={registration}
-              onCancel={handleCancelRegistration}
-            />
-          ))
-        ) : (
-          <div className="col-12 text-center">
-            <div className="alert alert-info">
-              <h5>No registrations found</h5>
-              <p>You haven't registered for any volunteer events yet.</p>
-              <a href="/" className="btn btn-primary">
-                Browse Available Events
-              </a>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Sample grid moved to Events tab (/events) */}
-
+      {/* Removed duplicate userRegistrations list */}
+      
       {/* Edit Profile Modal */}
       {showEditProfile && (
         <div className="modal-overlay" onClick={() => setShowEditProfile(false)}>
@@ -349,15 +336,27 @@ const UserDashboard = () => {
               </div>
             </div>
 
-            <div className="form-group">
-              <label>Họ và tên</label>
-              <input 
-                type="text" 
-                className="form-control" 
-                value={editName} 
-                onChange={(e) => setEditName(e.target.value)}
-                placeholder="Nhập họ và tên của bạn"
-              />
+            <div className="form-row">
+              <div className="form-group col-md-6">
+                <label>Họ</label>
+                <input 
+                  type="text" 
+                  className="form-control" 
+                  value={editLastname} 
+                  onChange={(e) => setEditLastname(e.target.value)}
+                  placeholder="Nhập họ"
+                />
+              </div>
+              <div className="form-group col-md-6">
+                <label>Tên</label>
+                <input 
+                  type="text" 
+                  className="form-control" 
+                  value={editFirstname} 
+                  onChange={(e) => setEditFirstname(e.target.value)}
+                  placeholder="Nhập tên"
+                />
+              </div>
             </div>
 
             <div className="text-right mt-4">

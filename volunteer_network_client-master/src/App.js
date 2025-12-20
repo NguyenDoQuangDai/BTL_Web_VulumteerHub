@@ -79,6 +79,10 @@ function App() {
             <ManageUsersDashboard />
           </Route>
 
+          <Route exact path='/admin/registrations'>
+            <AdminDashboard />
+          </Route>
+
           <Route exact path='/unauthorized'>
             <Header />
             <Unauthorized />

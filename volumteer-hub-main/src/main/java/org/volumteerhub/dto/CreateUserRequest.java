@@ -2,18 +2,21 @@ package org.volumteerhub.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
+import org.volumteerhub.common.validation.OnCreate;
 
 @Data
 public class CreateUserRequest {
-    @NotBlank
+    @NotBlank(groups = OnCreate.class)
     private String firstname;
 
-    @NotBlank
+    @NotBlank(groups = OnCreate.class)
     private String lastname;
 
-    @NotBlank
+    @NotBlank(groups = OnCreate.class)
     private String username;
 
-    @NotBlank
+    @NotBlank(groups = OnCreate.class)
     private String password;
+
+    private String avatar;
 }
