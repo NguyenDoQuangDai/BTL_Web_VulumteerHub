@@ -13,7 +13,8 @@ import java.util.List;
 
 @Entity
 @Table(name = "users", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"username"})
+        @UniqueConstraint(columnNames = {"username"}),
+        @UniqueConstraint(columnNames = {"email"}) // Ensure email is unique
 })
 @Getter
 @Setter
@@ -59,5 +60,8 @@ public class User {
     @LastModifiedDate
     @Column(nullable = false)
     private Instant updatedAt;
+
+    @Column(nullable = false, unique = true)
+    private String email;
 }
 

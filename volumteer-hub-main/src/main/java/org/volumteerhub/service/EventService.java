@@ -150,7 +150,11 @@ public class EventService {
     public void delete(UUID id) {
         Event event = findEventById(id);
         User currentUser = userService.getCurrentAuthenticatedUser();
-        validateOwnership(event, currentUser);
+
+        // Allow admin to delete any event
+        if (!userService.isCurrentUserAdmin()) {
+            validateOwnership(event, currentUser);
+        }
 
         eventRepository.deleteById(id);
     }

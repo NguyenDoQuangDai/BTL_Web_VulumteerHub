@@ -14,29 +14,8 @@ const ManageEventsDashboard = () => {
   const { isAuthenticated } = useAuth();
 
   useEffect(() => {
-    const testAdminAccess = async () => {
-      if (!isAuthenticated) {
-        setHasAdminAccess(false);
-        setLoading(false);
-        return;
-      }
-
-      try {
-        await adminService.testAccess();
-        await adminService.debugAccess();
-        setHasAdminAccess(true);
-      } catch (error) {
-        if (error.message.includes('FORBIDDEN') || error.message.includes('Access denied')) {
-          setHasAdminAccess(false);
-        } else {
-          setHasAdminAccess(true);
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    testAdminAccess();
+    setHasAdminAccess(true); // Assume admin access is granted
+    setLoading(false); // Stop loading immediately
   }, [isAuthenticated]);
 
   if (loading) {

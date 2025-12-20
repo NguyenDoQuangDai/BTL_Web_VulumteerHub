@@ -14,6 +14,7 @@ const Login = () => {
     firstname: '',
     lastname: '',
     username: '',
+    email: '', // Ensure email is initialized
     password: '',
   });
 
@@ -31,6 +32,8 @@ const Login = () => {
     from: { pathname: '/' },
   };
 
+  // Error state for form
+  const [formError, setFormError] = useState(''); // Add formError state
 
   // =========================================================
 
@@ -52,21 +55,29 @@ const Login = () => {
   const handleRegister = async () => {
     try {
       setIsLoading(true);
-      
+      setFormError(''); // Clear previous errors
+
       // Create user
       await userService.createUser({
         firstname: formData.firstname,
         lastname: formData.lastname,
         username: formData.username,
-        password: formData.password
+        email: formData.email, // Send email to backend
+        password: formData.password,
       });
-      
+
       // After successful registration, login automatically
       await login(formData.username, formData.password);
       history.replace(from);
-      
     } catch (error) {
-      console.error('Registration failed:', error);
+      //tạm để ntn
+        if (error.message === 'You do not have permission to access this resource') {
+          console.error('Registration failed:', error);
+          setFormError('The email/username is already taken. Please try again.');
+        } else {
+          console.error('Registration failed:', error);
+          setFormError(error.message || 'Registration failed. Please try again later.');
+        }
     } finally {
       setIsLoading(false);
     }
@@ -90,7 +101,7 @@ const Login = () => {
     e.preventDefault();
     
     if (newUser) {
-      if (formData.firstname && formData.lastname && formData.username && formData.password) {
+      if (formData.firstname && formData.lastname && formData.username && formData.email && formData.password) {
         handleRegister();
       }
     } else {
@@ -177,9 +188,9 @@ const Login = () => {
                 className='login-form shadow bg-white rounded text-left p-3'
               >
                 {/* Show error message */}
-                {error && (
+                {formError && (
                   <p style={{ maxWidth: '400px' }} className='text-danger'>
-                    {error}
+                    {formError}
                   </p>
                 )}
                 <h4 className='font-weight-bold mb-3'>Create Account</h4>
@@ -216,6 +227,18 @@ const Login = () => {
                     type='text'
                     placeholder='Username'
                     value={formData.username}
+                    required
+                  />
+                </div>
+                
+                <div className='form-group'>
+                  <input 
+                    className='form-control'
+                    onChange={handleInputChange}
+                    name='email'
+                    type='email'
+                    placeholder='Email'
+                    value={formData.email}
                     required
                   />
                 </div>

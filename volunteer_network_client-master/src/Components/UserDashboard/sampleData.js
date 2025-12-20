@@ -10,7 +10,7 @@ export const sampleEvents = [
     dateDeadline: plusDays(2),
     startDate: plusDays(3),
     endDate: plusDays(3.25),
-    ownerId: '3fa85f64-5717-4562-b3fc-2c963f66b001',
+    ownerId: '6ffeccfc-a299-424f-a654-642164a36ff1',
     status: 'APPROVED',
   },
   {
@@ -21,7 +21,7 @@ export const sampleEvents = [
     dateDeadline: plusDays(5),
     startDate: plusDays(6),
     endDate: plusDays(6.5),
-    ownerId: '3fa85f64-5717-4562-b3fc-2c963f66b002',
+    ownerId: '310fdcb3-df62-48d7-9aad-d7412b442c91',
     status: 'PENDING',
   },
   {
@@ -32,7 +32,7 @@ export const sampleEvents = [
     dateDeadline: plusDays(1),
     startDate: plusDays(2),
     endDate: plusDays(2.5),
-    ownerId: '3fa85f64-5717-4562-b3fc-2c963f66b003',
+    ownerId: '8efc539f-c70a-4ea6-b8cb-59deabebb5e2',
     status: 'DRAFT',
   },
   {
@@ -43,7 +43,7 @@ export const sampleEvents = [
     dateDeadline: plusDays(4),
     startDate: plusDays(5),
     endDate: plusDays(5.2),
-    ownerId: '3fa85f64-5717-4562-b3fc-2c963f66b004',
+    ownerId: 'b59463ae-3bde-4f2b-93b7-a8765c5f13fd',
     status: 'APPROVED',
   },
   {
@@ -54,7 +54,7 @@ export const sampleEvents = [
     dateDeadline: plusDays(7),
     startDate: plusDays(8),
     endDate: plusDays(8.5),
-    ownerId: '3fa85f64-5717-4562-b3fc-2c963f66b005',
+    ownerId: 'd2923cdf-00ba-4d06-80e8-dfb252ef5a3b',
     status: 'REJECTED',
   },
   {

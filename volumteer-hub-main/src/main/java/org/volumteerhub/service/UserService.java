@@ -34,13 +34,24 @@ public class UserService implements UserDetailsService {
 
     // CREATE
     public UserResponse createUser(CreateUserRequest req) {
+        // Check if email already exists
+        if (userRepository.existsByEmail(req.getEmail())) {
+            throw new IllegalArgumentException("Email is already taken.");
+        }
+
+        // Check if username already exists
+        if (userRepository.existsByUsername(req.getUsername())) {
+            throw new IllegalArgumentException("Username is already taken.");
+        }
+
         User user = User.builder()
                 .firstname(req.getFirstname())
                 .lastname(req.getLastname())
                 .username(req.getUsername())
+                .email(req.getEmail())
                 .passwordHash(passwordEncoder.encode(req.getPassword()))
                 .role(UserRole.USER)
-                .isActive(Boolean.FALSE)
+                .isActive(Boolean.TRUE)
                 .build();
 
         userRepository.save(user);
@@ -50,6 +61,7 @@ public class UserService implements UserDetailsService {
                 .firstname(user.getFirstname())
                 .lastname(user.getLastname())
                 .username(user.getUsername())
+                .email(user.getEmail())
                 .role(user.getRole())
                 .createdAt(user.getCreatedAt())
                 .build();
@@ -61,6 +73,7 @@ public class UserService implements UserDetailsService {
                 .firstname(user.getFirstname())
                 .lastname(user.getLastname())
                 .username(user.getUsername())
+                .email(user.getEmail())
                 .role(user.getRole())
                 .isActive(user.getIsActive())
                 .createdAt(user.getCreatedAt())
@@ -168,5 +181,9 @@ public class UserService implements UserDetailsService {
         if (!isCurrentUserAdmin() && !resourceOwner.equals(currentUser)) {
             throw new UnauthorizedAccessException("Operation not permitted.");
         }
+    }
+
+    public boolean emailExists(String email) {
+        return userRepository.existsByEmail(email);
     }
 }

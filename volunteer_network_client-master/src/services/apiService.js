@@ -59,7 +59,7 @@ export const authService = {
 // Event Service
 export const eventService = {
   // Get all events with pagination and filters
-  getEvents: async (page = 0, size = 20, status = null, search = null, sort = null) => {
+  getEvents: async (page = 0, size = 20, status = null, search = null, sort = null, ownerId = null) => {
     try {
       let url = `${API_ENDPOINTS.EVENTS.LIST}?page=${page}&size=${size}`;
       
@@ -73,6 +73,10 @@ export const eventService = {
 
       if (sort) {
         url += `&sort=${sort}`;
+      }
+
+      if (ownerId) {
+        url += `&ownerId=${ownerId}`;
       }
       
       const response = await apiRequest(url);
@@ -205,6 +209,17 @@ export const userService = {
     return await apiRequest(API_ENDPOINTS.USERS.GET(id));
   },
 
+  getMyself: async () => {
+    return await apiRequest(API_ENDPOINTS.USERS.MYSELF);
+  },
+
+  updateUser: async (userId, userData) => {
+    return apiRequest(API_ENDPOINTS.USERS.UPDATE(userId), {
+      method: 'PATCH',
+      body: JSON.stringify(userData),
+    });
+  },
+
   // Create new user
   createUser: async (userData) => {
     return await apiRequest(API_ENDPOINTS.USERS.CREATE, {
@@ -213,8 +228,17 @@ export const userService = {
         firstname: userData.firstname,
         lastname: userData.lastname,
         username: userData.username,
+        email: userData.email,
         password: userData.password
       }),
+    });
+  },
+
+  // Update user
+  updateUser: async (id, userData) => {
+    return await apiRequest(API_ENDPOINTS.USERS.UPDATE(id), {
+      method: 'PUT',
+      body: JSON.stringify(userData),
     });
   },
 };
@@ -276,7 +300,15 @@ export const adminService = {
   // Get all events (for admin dashboard)
   getAllEvents: async () => {
     try {
-      return await apiRequest(API_ENDPOINTS.ADMIN.GET_ALL_EVENTS);
+      // Use the general events endpoint which allows admins to see all events
+      // Request a large size to get all events since pagination isn't implemented in the admin UI yet
+      const response = await apiRequest(`${API_ENDPOINTS.EVENTS.LIST}?size=1000`);
+      
+      if (!response) return [];
+      if (response._embedded && response._embedded.events) {
+        return response._embedded.events;
+      }
+      return response.content || (Array.isArray(response) ? response : []);
     } catch (error) {
       if (error.message.includes('FORBIDDEN')) {
         throw new Error('Access denied. Admin privileges required.');
@@ -288,7 +320,11 @@ export const adminService = {
   // Get all registrations (for admin dashboard)
   getAllRegistrations: async () => {
     try {
-      return await apiRequest(API_ENDPOINTS.ADMIN.GET_ALL_REGISTRATIONS);
+      const response = await apiRequest(API_ENDPOINTS.ADMIN.GET_ALL_REGISTRATIONS);
+      if (response._embedded && response._embedded.registrations) {
+        return response._embedded.registrations;
+      }
+      return response.content || [];
     } catch (error) {
       if (error.message.includes('FORBIDDEN')) {
         throw new Error('Access denied. Admin privileges required.');
@@ -300,6 +336,10 @@ export const adminService = {
 
 // Post Service
 export const postService = {
+  // Lấy tất cả bài viết (Global Forum)
+  getAllPosts: async (page = 0, size = 20) => {
+    return await apiRequest(`${API_ENDPOINTS.POSTS.LIST_ALL}?page=${page}&size=${size}&sort=createdAt,desc`);
+  },
   // Lấy danh sách bài viết theo sự kiện
   getPostsByEvent: async (eventId, page = 0, size = 20, type = null) => {
     let url = `${API_ENDPOINTS.EVENTS.GET(eventId)}/posts?page=${page}&size=${size}`;

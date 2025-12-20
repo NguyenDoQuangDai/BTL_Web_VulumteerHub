@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { eventService, postService, registrationService } from '../../services/apiService';
-import API_BASE_URL from '../../config/api';
+import { eventService, postService, registrationService, userService } from '../../services/apiService';
+import { apiRequest, API_ENDPOINTS } from '../../config/api';
 import ReactDOM from 'react-dom';
 import EventChannelSidebar from './EventChannelSidebar';
 import EditHistoryModal from './EditHistoryModal';
+import CreatePostDialog from './CreatePostDialog';
 import { useAuth } from '../../contexts/AuthContext';
 import './EventChannelDashboard.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -35,7 +36,6 @@ import {
   faHeart as faHeartSolid,
 } from '@fortawesome/free-solid-svg-icons';
 import { faHeart as faHeartRegular } from '@fortawesome/free-regular-svg-icons';
-
 const statusClass = (status) => {
   switch (status) {
     case 'APPROVED':
@@ -133,11 +133,8 @@ const EventDetails = ({ event, user, onEventUpdate }) => {
     ];
   }
 
-  // Permission logic
-  const isOwner = user && (
-    (event.username && user.username === event.username) ||
-    (event.owner && user.username === event.owner) ||
-    (event.ownerId && user.id === event.ownerId)
+  let isOwner = user && user.id && (
+    (event.ownerId && String(user.id) === String(event.ownerId))
   );
   const isAdmin = user && (user.role === 'Quản trị viên' || user.role === 'ADMIN');
 
@@ -160,6 +157,29 @@ const EventDetails = ({ event, user, onEventUpdate }) => {
     endDate: event.endDate || '',
     images: event.images || (event.image || event.imageUrl ? [event.image || event.imageUrl] : []),
   });
+  const [submitting, setSubmitting] = useState(false);
+
+  const [creatorName, setCreatorName] = useState(null);
+
+  useEffect(() => {
+    const fetchCreatorName = async () => {
+      if (event.ownerId) {
+        try {
+          const data = await apiRequest(API_ENDPOINTS.USERS.GET(event.ownerId));
+          setCreatorName(`${data.firstname} ${data.lastname}`);
+        } catch (error) {
+          // Suppress 404 errors for missing users (common with test data)
+          if (error.message && (error.message.includes('not found') || error.message.includes('404'))) {
+             setCreatorName('Unknown Organizer');
+          } else {
+             console.error('Error fetching creator name:', error);
+          }
+        }
+      }
+    };
+
+    fetchCreatorName();
+  }, [event.ownerId]);
 
   useEffect(() => {
       const checkRegistration = async () => {
@@ -201,6 +221,30 @@ const EventDetails = ({ event, user, onEventUpdate }) => {
         images: event.images || (event.image || event.imageUrl ? [event.image || event.imageUrl] : []),
       });
   }, [event]);
+
+  const handleSubmitForApproval = async () => {
+    if (!window.confirm('Bạn có chắc chắn muốn gửi sự kiện này để xét duyệt?')) {
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await eventService.submitEvent(event.id);
+      
+      // Refresh event data
+      if (onEventUpdate) {
+        const updated = await eventService.getEvent(event.id);
+        onEventUpdate(updated);
+      }
+      
+      alert('Đã gửi sự kiện để xét duyệt thành công!');
+    } catch (error) {
+      console.error("Failed to submit event for approval", error);
+      alert("Không thể gửi sự kiện để xét duyệt: " + (error.message || error));
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const handleImageChange = (e) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -332,25 +376,55 @@ const EventDetails = ({ event, user, onEventUpdate }) => {
           <span className={statusClass(event.status)}>{event.status}</span>
         </div>
         
+        {/* Debug Info - Remove after fixing */}
+        {/* <div className="alert alert-info small mb-3">
+          <strong>Debug Info:</strong><br/>
+          Status: {event.status}<br/>
+          Owner ID: {event.ownerId}<br/>
+          User ID: {user?.id}<br/>
+          Is Owner: {isOwner ? 'Yes' : 'No'}<br/>
+          Should Show Submit: {(isOwner && event.status === 'DRAFT') ? 'Yes' : 'No'}
+        </div> */}
+
         {/* Action Buttons */}
         <div className="d-flex mt-3 justify-content-between align-items-center">
             <div>
-                <button
-                  type="button"
-                  className={`btn btn-sm mr-2 ${
-                    registrationStatus === 'REJECTED' ? 'btn-secondary' :
-                    registered ? 'btn-outline-danger' : 'btn-primary'
-                  }`}
-                  onClick={handleRegister}
-                  disabled={loadingReg || registrationStatus === 'REJECTED'}
-                >
-                  {loadingReg ? 'Đang xử lý...' : 
-                   registrationStatus === 'REJECTED' ? 'Đã bị từ chối' :
-                   (registered ? 'Hủy đăng ký' : 'Đăng ký tham gia')}
-                </button>
+                {/* Debug: Always show what condition is being checked */}
+                {console.log('Render check - isOwner:', isOwner, 'status:', event.status)}
+                
+                {/* Show "Gửi xét duyệt" button if user is owner and event status is DRAFT */}
+                {isOwner && event.status === 'DRAFT' ? (
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-warning mr-2"
+                    onClick={handleSubmitForApproval}
+                    disabled={submitting}
+                  >
+                    {submitting ? 'Đang gửi...' : 'Gửi xét duyệt'}
+                  </button>
+                ) : !isOwner ? (
+                  <button
+                    type="button"
+                    className={`btn btn-sm mr-2 ${
+                      registrationStatus === 'REJECTED' ? 'btn-secondary' :
+                      registered ? 'btn-outline-danger' : 'btn-primary'
+                    }`}
+                    onClick={handleRegister}
+                    disabled={loadingReg || registrationStatus === 'REJECTED' || event.status === 'DRAFT'}
+                  >
+                    {loadingReg ? 'Đang xử lý...' : 
+                     registrationStatus === 'REJECTED' ? 'Đã bị từ chối' :
+                     event.status === 'DRAFT' ? 'Chưa mở đăng ký' :
+                     (registered ? 'Hủy đăng ký' : 'Đăng ký tham gia')}
+                  </button>
+                ) : (
+                  <div className="text-muted small">
+                    {/* (Chủ sở hữu không thể đăng ký) */}
+                  </div>
+                )}
             </div>
             <div>
-                {canEdit && (
+                {canEdit && event.status === 'DRAFT' && (
                     <button 
                         className="btn btn-sm btn-outline-secondary mr-2"
                         onClick={() => setShowEditForm(true)}
@@ -401,7 +475,7 @@ const EventDetails = ({ event, user, onEventUpdate }) => {
           </li>
           <li className='mb-2'>
             <FontAwesomeIcon icon={faUser} className='mr-2 text-info' />
-            <strong>Tạo bởi:</strong> {event.username || event.ownerId}
+            <strong>Tạo bởi:</strong> {creatorName || event.username || event.ownerId}
           </li>
         </ul>
       </div>
@@ -1008,6 +1082,36 @@ const DiscussionTab = ({ event, user }) => {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+
+  const handleCreatePost = async (content, mediaUrls) => {
+    try {
+      const postData = {
+        content: content,
+        eventId: event.id,
+        type: 'DISCUSSION',
+        mediaUrls: mediaUrls // Array of temp file names
+      };
+      const newPostResponse = await postService.createPost(event.id, postData);
+      
+      if (newPostResponse && newPostResponse.id) {
+         const mappedPost = mapPost(newPostResponse);
+         setPosts(prev => {
+             const newPosts = [mappedPost, ...prev];
+             return newPosts.sort((a, b) => {
+                if (a.isPinned === b.isPinned) return b.id - a.id;
+                return a.isPinned ? -1 : 1;
+             });
+         });
+      } else {
+         loadPosts();
+      }
+    } catch (error) {
+      console.error("Failed to create post", error);
+      throw error; // Re-throw to let dialog handle it
+    }
+  };
+
   // Permission logic
   const isOwner = !!(user && event && (
     (event.ownerId && user.id == event.ownerId) ||
@@ -1509,25 +1613,29 @@ const DiscussionTab = ({ event, user }) => {
             type="text" 
             className="form-control rounded-pill bg-light border-0" 
             placeholder="Bạn đang nghĩ gì?"
-            value={newPostContent}
-            onChange={(e) => setNewPostContent(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handlePost()}
+            onClick={() => setShowCreateDialog(true)}
+            readOnly
+            style={{ cursor: 'pointer' }}
           />
         </div>
-        <div className="border-top pt-2 d-flex justify-content-between align-items-center">
-            <button className="btn btn-light btn-sm text-secondary font-weight-bold">
+        <div className="border-top pt-2">
+            <button 
+              className="btn btn-light btn-sm text-secondary font-weight-bold w-100"
+              onClick={() => setShowCreateDialog(true)}
+            >
                 <FontAwesomeIcon icon={faImage} className="text-success mr-2" />
                 Ảnh/Video
             </button>
-            <button 
-                className="btn btn-primary btn-sm px-4 rounded-pill"
-                onClick={handlePost}
-                disabled={!newPostContent.trim()}
-            >
-                Đăng
-            </button>
         </div>
       </div>
+
+      {/* Create Post Dialog */}
+      <CreatePostDialog
+        isOpen={showCreateDialog}
+        onClose={() => setShowCreateDialog(false)}
+        onSubmit={handleCreatePost}
+        user={user}
+      />
 
       {/* Posts Feed */}
       {loading && <div className="text-center py-3"><div className="spinner-border text-primary" role="status"><span className="sr-only">Loading...</span></div></div>}
@@ -1638,7 +1746,7 @@ const DiscussionTab = ({ event, user }) => {
                                     {post.media.map((url, idx) => (
                                         <div key={idx} className={`col-${post.media.length === 1 ? '12' : '6'} p-1`}>
                                             <img 
-                                                src={url.startsWith('http') ? url : `${API_BASE_URL.replace('/api', '')}${url}`} 
+                                                src={url.startsWith('http') ? url : `${url}`} 
                                                 alt="Post media" 
                                                 className="img-fluid rounded" 
                                                 style={{ maxHeight: '300px', width: '100%', objectFit: 'cover' }}
@@ -1966,7 +2074,33 @@ const NotificationsTab = ({ event, user }) => {
 };
 
 const EventChannelDashboard = ({ event, onClose }) => {
-      useEffect(() => {
+    const [showEndConfirm, setShowEndConfirm] = useState(false);
+    const [members, setMembers] = useState(event.members || []);
+    const [eventDetail, setEventDetail] = useState(event);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [currentUser, setCurrentUser] = useState(null);
+    
+    const { user: authUser, isAuthenticated } = useAuth();
+    
+    // Fetch current user from /users/myself
+    useEffect(() => {
+        if (isAuthenticated) {
+            const fetchUserData = async () => {
+                try {
+                    const userData = await userService.getMyself();
+                    setCurrentUser(userData);
+                } catch (e) {
+                    console.error("Failed to fetch user data", e);
+                    // Fallback to authUser if API fails
+                    setCurrentUser(authUser);
+                }
+            };
+            fetchUserData();
+        }
+    }, [isAuthenticated, authUser]);
+    
+    useEffect(() => {
         if (event && event.id) {
           setLoading(true);
           setError(null);
@@ -1975,12 +2109,8 @@ const EventChannelDashboard = ({ event, onClose }) => {
             .catch(() => setError('Không thể tải chi tiết sự kiện'))
             .finally(() => setLoading(false));
         }
-      }, [event]);
-    const [showEndConfirm, setShowEndConfirm] = useState(false);
-    const [members, setMembers] = useState(event.members || []);
-    const [eventDetail, setEventDetail] = useState(event);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
+    }, [event]);
+    
     const handleEndEvent = () => setShowEndConfirm(true);
     const handleConfirmEndEvent = async () => {
       try {
@@ -1993,9 +2123,9 @@ const EventChannelDashboard = ({ event, onClose }) => {
       }
     };
     const handleCancelEndEvent = () => setShowEndConfirm(false);
-  const { user: authUser } = useAuth();
+  
   // Ensure user has a role for testing purposes (Default to 'Quản trị viên' if missing)
-  const user = authUser ? { ...authUser, role: authUser.role || 'Quản trị viên' } : null;
+  const user = currentUser ? { ...currentUser, role: currentUser.role || 'Quản trị viên' } : null;
   
   const [activeTab, setActiveTab] = useState('details');
 

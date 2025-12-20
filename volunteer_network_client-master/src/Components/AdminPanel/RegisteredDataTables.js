@@ -18,13 +18,8 @@ const RegisteredDataTables = () => {
 
   // Get all the Volunteer Register
   useEffect(() => {
-    fetch('https://volunteer-network-react.herokuapp.com/adminTasks')
-      .then((res) => res.json())
-      .then((data) => {
-        setTaskList(data);
-        setPreLoaderVisibility('none');
-      });
-  }, [taskList]);
+    setTaskList([]);
+  }, []);
 
   // Delete task when user click on delete button and update the dashboard
   const deleteTaskAdmin = (_id) => {
@@ -96,14 +91,3 @@ const RegisteredDataTables = () => {
 };
 
 export default RegisteredDataTables;
-
-
-
-
-
-  // // handle delete update
-  // const handleDeleteUpdateAdmin = () => {
-  //   fetch('https://volunteer-network-react.herokuapp.com/adminTasks')
-  //     .then((res) => res.json())
-  //     .then((data) => setTaskList(data));
-  // };

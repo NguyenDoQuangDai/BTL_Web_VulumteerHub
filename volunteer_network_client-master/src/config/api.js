@@ -34,7 +34,9 @@ export const API_ENDPOINTS = {
   USERS: {
     LIST: `${API_BASE_URL}/users`,
     GET: (id) => `${API_BASE_URL}/users/${id}`,
+    MYSELF: `${API_BASE_URL}/users/myself`,
     CREATE: `${API_BASE_URL}/users`,
+    UPDATE: (id) => `${API_BASE_URL}/users/${id}`,
   },
   
   // Admin
@@ -49,6 +51,7 @@ export const API_ENDPOINTS = {
 
   // Posts
   POSTS: {
+    LIST_ALL: `${API_BASE_URL}/posts`,
     LIST_BY_EVENT: (eventId) => `${API_BASE_URL}/events/${eventId}/posts`,
     CREATE: (eventId) => `${API_BASE_URL}/events/${eventId}/posts`,
     GET: (id) => `${API_BASE_URL}/posts/${id}`,
