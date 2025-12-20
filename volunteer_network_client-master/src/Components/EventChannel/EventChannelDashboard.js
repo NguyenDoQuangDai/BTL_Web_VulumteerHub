@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { eventService, postService, registrationService } from '../../services/apiService';
+import { eventService, postService, registrationService, userService } from '../../services/apiService';
 import { apiRequest, API_ENDPOINTS } from '../../config/api';
 import ReactDOM from 'react-dom';
 import EventChannelSidebar from './EventChannelSidebar';
@@ -133,11 +133,8 @@ const EventDetails = ({ event, user, onEventUpdate }) => {
     ];
   }
 
-  // Permission logic
-  const isOwner = user && (
-    (event.username && user.username === event.username) ||
-    (event.owner && user.username === event.owner) ||
-    (event.ownerId && user.id === event.ownerId)
+  let isOwner = user && user.id && (
+    (event.ownerId && String(user.id) === String(event.ownerId))
   );
   const isAdmin = user && (user.role === 'Quản trị viên' || user.role === 'ADMIN');
 
@@ -160,22 +157,23 @@ const EventDetails = ({ event, user, onEventUpdate }) => {
     endDate: event.endDate || '',
     images: event.images || (event.image || event.imageUrl ? [event.image || event.imageUrl] : []),
   });
+  const [submitting, setSubmitting] = useState(false);
 
-  const [creatorLastName, setCreatorLastName] = useState(null);
+  const [creatorName, setCreatorName] = useState(null);
 
   useEffect(() => {
-    const fetchCreatorLastName = async () => {
+    const fetchCreatorName = async () => {
       if (event.ownerId) {
         try {
           const data = await apiRequest(API_ENDPOINTS.USERS.GET(event.ownerId));
-          setCreatorLastName(`${data.firstname} ${data.lastname}`);
+          setCreatorName(`${data.firstname} ${data.lastname}`);
         } catch (error) {
           console.error('Error fetching creator name:', error);
         }
       }
     };
 
-    fetchCreatorLastName();
+    fetchCreatorName();
   }, [event.ownerId]);
 
   useEffect(() => {
@@ -218,6 +216,30 @@ const EventDetails = ({ event, user, onEventUpdate }) => {
         images: event.images || (event.image || event.imageUrl ? [event.image || event.imageUrl] : []),
       });
   }, [event]);
+
+  const handleSubmitForApproval = async () => {
+    if (!window.confirm('Bạn có chắc chắn muốn gửi sự kiện này để xét duyệt?')) {
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await eventService.submitEvent(event.id);
+      
+      // Refresh event data
+      if (onEventUpdate) {
+        const updated = await eventService.getEvent(event.id);
+        onEventUpdate(updated);
+      }
+      
+      alert('Đã gửi sự kiện để xét duyệt thành công!');
+    } catch (error) {
+      console.error("Failed to submit event for approval", error);
+      alert("Không thể gửi sự kiện để xét duyệt: " + (error.message || error));
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const handleImageChange = (e) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -349,25 +371,55 @@ const EventDetails = ({ event, user, onEventUpdate }) => {
           <span className={statusClass(event.status)}>{event.status}</span>
         </div>
         
+        {/* Debug Info - Remove after fixing */}
+        {/* <div className="alert alert-info small mb-3">
+          <strong>Debug Info:</strong><br/>
+          Status: {event.status}<br/>
+          Owner ID: {event.ownerId}<br/>
+          User ID: {user?.id}<br/>
+          Is Owner: {isOwner ? 'Yes' : 'No'}<br/>
+          Should Show Submit: {(isOwner && event.status === 'DRAFT') ? 'Yes' : 'No'}
+        </div> */}
+
         {/* Action Buttons */}
         <div className="d-flex mt-3 justify-content-between align-items-center">
             <div>
-                <button
-                  type="button"
-                  className={`btn btn-sm mr-2 ${
-                    registrationStatus === 'REJECTED' ? 'btn-secondary' :
-                    registered ? 'btn-outline-danger' : 'btn-primary'
-                  }`}
-                  onClick={handleRegister}
-                  disabled={loadingReg || registrationStatus === 'REJECTED'}
-                >
-                  {loadingReg ? 'Đang xử lý...' : 
-                   registrationStatus === 'REJECTED' ? 'Đã bị từ chối' :
-                   (registered ? 'Hủy đăng ký' : 'Đăng ký tham gia')}
-                </button>
+                {/* Debug: Always show what condition is being checked */}
+                {console.log('Render check - isOwner:', isOwner, 'status:', event.status)}
+                
+                {/* Show "Gửi xét duyệt" button if user is owner and event status is DRAFT */}
+                {isOwner && event.status === 'DRAFT' ? (
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-warning mr-2"
+                    onClick={handleSubmitForApproval}
+                    disabled={submitting}
+                  >
+                    {submitting ? 'Đang gửi...' : 'Gửi xét duyệt'}
+                  </button>
+                ) : !isOwner ? (
+                  <button
+                    type="button"
+                    className={`btn btn-sm mr-2 ${
+                      registrationStatus === 'REJECTED' ? 'btn-secondary' :
+                      registered ? 'btn-outline-danger' : 'btn-primary'
+                    }`}
+                    onClick={handleRegister}
+                    disabled={loadingReg || registrationStatus === 'REJECTED' || event.status === 'DRAFT'}
+                  >
+                    {loadingReg ? 'Đang xử lý...' : 
+                     registrationStatus === 'REJECTED' ? 'Đã bị từ chối' :
+                     event.status === 'DRAFT' ? 'Chưa mở đăng ký' :
+                     (registered ? 'Hủy đăng ký' : 'Đăng ký tham gia')}
+                  </button>
+                ) : (
+                  <div className="text-muted small">
+                    {/* (Chủ sở hữu không thể đăng ký) */}
+                  </div>
+                )}
             </div>
             <div>
-                {canEdit && (
+                {canEdit && event.status === 'DRAFT' && (
                     <button 
                         className="btn btn-sm btn-outline-secondary mr-2"
                         onClick={() => setShowEditForm(true)}
@@ -418,7 +470,7 @@ const EventDetails = ({ event, user, onEventUpdate }) => {
           </li>
           <li className='mb-2'>
             <FontAwesomeIcon icon={faUser} className='mr-2 text-info' />
-            <strong>Tạo bởi:</strong> {creatorLastName || event.username || event.ownerId}
+            <strong>Tạo bởi:</strong> {creatorName || event.username || event.ownerId}
           </li>
         </ul>
       </div>
@@ -2017,7 +2069,33 @@ const NotificationsTab = ({ event, user }) => {
 };
 
 const EventChannelDashboard = ({ event, onClose }) => {
-      useEffect(() => {
+    const [showEndConfirm, setShowEndConfirm] = useState(false);
+    const [members, setMembers] = useState(event.members || []);
+    const [eventDetail, setEventDetail] = useState(event);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [currentUser, setCurrentUser] = useState(null);
+    
+    const { user: authUser, isAuthenticated } = useAuth();
+    
+    // Fetch current user from /users/myself
+    useEffect(() => {
+        if (isAuthenticated) {
+            const fetchUserData = async () => {
+                try {
+                    const userData = await userService.getMyself();
+                    setCurrentUser(userData);
+                } catch (e) {
+                    console.error("Failed to fetch user data", e);
+                    // Fallback to authUser if API fails
+                    setCurrentUser(authUser);
+                }
+            };
+            fetchUserData();
+        }
+    }, [isAuthenticated, authUser]);
+    
+    useEffect(() => {
         if (event && event.id) {
           setLoading(true);
           setError(null);
@@ -2026,12 +2104,8 @@ const EventChannelDashboard = ({ event, onClose }) => {
             .catch(() => setError('Không thể tải chi tiết sự kiện'))
             .finally(() => setLoading(false));
         }
-      }, [event]);
-    const [showEndConfirm, setShowEndConfirm] = useState(false);
-    const [members, setMembers] = useState(event.members || []);
-    const [eventDetail, setEventDetail] = useState(event);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
+    }, [event]);
+    
     const handleEndEvent = () => setShowEndConfirm(true);
     const handleConfirmEndEvent = async () => {
       try {
@@ -2044,9 +2118,9 @@ const EventChannelDashboard = ({ event, onClose }) => {
       }
     };
     const handleCancelEndEvent = () => setShowEndConfirm(false);
-  const { user: authUser } = useAuth();
+  
   // Ensure user has a role for testing purposes (Default to 'Quản trị viên' if missing)
-  const user = authUser ? { ...authUser, role: authUser.role || 'Quản trị viên' } : null;
+  const user = currentUser ? { ...currentUser, role: currentUser.role || 'Quản trị viên' } : null;
   
   const [activeTab, setActiveTab] = useState('details');
 

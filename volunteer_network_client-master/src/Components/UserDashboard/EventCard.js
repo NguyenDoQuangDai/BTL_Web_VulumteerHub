@@ -15,6 +15,7 @@ import {
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { registrationService, eventService } from '../../services/apiService';
+import { apiRequest, API_ENDPOINTS } from '../../config/api';
 
 const statusClass = (status) => {
   switch (status) {
@@ -118,6 +119,23 @@ const EventCard = ({ evt }) => {
     endDate: evt.endDate || '',
     images: evt.images || (evt.image || evt.imageUrl ? [evt.image || evt.imageUrl] : []),
   });
+
+  const [creatorName, setCreatorName] = useState(null);
+
+  useEffect(() => {
+    const fetchCreatorName = async () => {
+      if (evt.ownerId) {
+        try {
+          const data = await apiRequest(API_ENDPOINTS.USERS.GET(evt.ownerId));
+          setCreatorName(`${data.firstname} ${data.lastname}`);
+        } catch (error) {
+          console.error('Error fetching creator name:', error);
+        }
+      }
+    };
+
+    fetchCreatorName();
+  }, [evt.ownerId]);
 
   useEffect(() => {
       const checkRegistration = async () => {
@@ -389,7 +407,7 @@ const EventCard = ({ evt }) => {
             </li>
             <li className="owner-line">
               <FontAwesomeIcon icon={faUser} className="mr-1 owner-icon" />
-              <strong>Tạo bởi:</strong> {evt.username || evt.owner || evt.ownerId}
+              <strong>Tạo bởi:</strong> {creatorName || evt.username || evt.owner || evt.ownerId}
             </li>
           </ul>
 
