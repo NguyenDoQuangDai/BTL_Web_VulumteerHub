@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { eventService, postService, registrationService } from '../../services/apiService';
-import API_BASE_URL from '../../config/api';
+import { apiRequest, API_ENDPOINTS } from '../../config/api';
 import ReactDOM from 'react-dom';
 import EventChannelSidebar from './EventChannelSidebar';
 import EditHistoryModal from './EditHistoryModal';
@@ -35,7 +35,6 @@ import {
   faHeart as faHeartSolid,
 } from '@fortawesome/free-solid-svg-icons';
 import { faHeart as faHeartRegular } from '@fortawesome/free-regular-svg-icons';
-
 const statusClass = (status) => {
   switch (status) {
     case 'APPROVED':
@@ -160,6 +159,23 @@ const EventDetails = ({ event, user, onEventUpdate }) => {
     endDate: event.endDate || '',
     images: event.images || (event.image || event.imageUrl ? [event.image || event.imageUrl] : []),
   });
+
+  const [creatorLastName, setCreatorLastName] = useState(null);
+
+  useEffect(() => {
+    const fetchCreatorLastName = async () => {
+      if (event.ownerId) {
+        try {
+          const data = await apiRequest(API_ENDPOINTS.USERS.GET(event.ownerId));
+          setCreatorLastName(`${data.firstname} ${data.lastname}`);
+        } catch (error) {
+          console.error('Error fetching creator name:', error);
+        }
+      }
+    };
+
+    fetchCreatorLastName();
+  }, [event.ownerId]);
 
   useEffect(() => {
       const checkRegistration = async () => {
@@ -401,7 +417,7 @@ const EventDetails = ({ event, user, onEventUpdate }) => {
           </li>
           <li className='mb-2'>
             <FontAwesomeIcon icon={faUser} className='mr-2 text-info' />
-            <strong>Tạo bởi:</strong> {event.username || event.ownerId}
+            <strong>Tạo bởi:</strong> {creatorLastName || event.username || event.ownerId}
           </li>
         </ul>
       </div>
@@ -1638,7 +1654,7 @@ const DiscussionTab = ({ event, user }) => {
                                     {post.media.map((url, idx) => (
                                         <div key={idx} className={`col-${post.media.length === 1 ? '12' : '6'} p-1`}>
                                             <img 
-                                                src={url.startsWith('http') ? url : `${API_BASE_URL.replace('/api', '')}${url}`} 
+                                                src={url.startsWith('http') ? url : `${url}`} 
                                                 alt="Post media" 
                                                 className="img-fluid rounded" 
                                                 style={{ maxHeight: '300px', width: '100%', objectFit: 'cover' }}
