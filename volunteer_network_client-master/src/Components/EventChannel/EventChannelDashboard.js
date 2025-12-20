@@ -4,6 +4,7 @@ import { apiRequest, API_ENDPOINTS } from '../../config/api';
 import ReactDOM from 'react-dom';
 import EventChannelSidebar from './EventChannelSidebar';
 import EditHistoryModal from './EditHistoryModal';
+import CreatePostDialog from './CreatePostDialog';
 import { useAuth } from '../../contexts/AuthContext';
 import './EventChannelDashboard.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -1024,6 +1025,36 @@ const DiscussionTab = ({ event, user }) => {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+
+  const handleCreatePost = async (content, mediaUrls) => {
+    try {
+      const postData = {
+        content: content,
+        eventId: event.id,
+        type: 'DISCUSSION',
+        mediaUrls: mediaUrls // Array of temp file names
+      };
+      const newPostResponse = await postService.createPost(event.id, postData);
+      
+      if (newPostResponse && newPostResponse.id) {
+         const mappedPost = mapPost(newPostResponse);
+         setPosts(prev => {
+             const newPosts = [mappedPost, ...prev];
+             return newPosts.sort((a, b) => {
+                if (a.isPinned === b.isPinned) return b.id - a.id;
+                return a.isPinned ? -1 : 1;
+             });
+         });
+      } else {
+         loadPosts();
+      }
+    } catch (error) {
+      console.error("Failed to create post", error);
+      throw error; // Re-throw to let dialog handle it
+    }
+  };
+
   // Permission logic
   const isOwner = !!(user && event && (
     (event.ownerId && user.id == event.ownerId) ||
@@ -1525,25 +1556,29 @@ const DiscussionTab = ({ event, user }) => {
             type="text" 
             className="form-control rounded-pill bg-light border-0" 
             placeholder="Bạn đang nghĩ gì?"
-            value={newPostContent}
-            onChange={(e) => setNewPostContent(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handlePost()}
+            onClick={() => setShowCreateDialog(true)}
+            readOnly
+            style={{ cursor: 'pointer' }}
           />
         </div>
-        <div className="border-top pt-2 d-flex justify-content-between align-items-center">
-            <button className="btn btn-light btn-sm text-secondary font-weight-bold">
+        <div className="border-top pt-2">
+            <button 
+              className="btn btn-light btn-sm text-secondary font-weight-bold w-100"
+              onClick={() => setShowCreateDialog(true)}
+            >
                 <FontAwesomeIcon icon={faImage} className="text-success mr-2" />
                 Ảnh/Video
             </button>
-            <button 
-                className="btn btn-primary btn-sm px-4 rounded-pill"
-                onClick={handlePost}
-                disabled={!newPostContent.trim()}
-            >
-                Đăng
-            </button>
         </div>
       </div>
+
+      {/* Create Post Dialog */}
+      <CreatePostDialog
+        isOpen={showCreateDialog}
+        onClose={() => setShowCreateDialog(false)}
+        onSubmit={handleCreatePost}
+        user={user}
+      />
 
       {/* Posts Feed */}
       {loading && <div className="text-center py-3"><div className="spinner-border text-primary" role="status"><span className="sr-only">Loading...</span></div></div>}
