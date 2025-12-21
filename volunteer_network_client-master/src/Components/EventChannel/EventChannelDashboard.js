@@ -240,7 +240,7 @@ const EventDetails = ({ event, user, onEventUpdate }) => {
       setSubmitting(false);
     }
   };
-
+/*
   const handleImageChange = (e) => {
     if (e.target.files && e.target.files.length > 0) {
       const files = Array.from(e.target.files);
@@ -264,7 +264,7 @@ const EventDetails = ({ event, user, onEventUpdate }) => {
       images: prev.images.filter((_, i) => i !== index)
     }));
   };
-
+*/
   const hasUnsavedChanges = () => {
     return (
       editForm.name !== (event.name || '') ||
@@ -583,7 +583,7 @@ const EventDetails = ({ event, user, onEventUpdate }) => {
                 />
               </div>
 
-              <div className="form-group">
+              {/*<div className="form-group">
                 <label className="field-label">
                   <FontAwesomeIcon icon={faImage} className="mr-1" />
                   Hình ảnh
@@ -614,7 +614,7 @@ const EventDetails = ({ event, user, onEventUpdate }) => {
                     </div>
                   ))}
                 </div>
-              </div>
+              </div>*/}
 
               <div className="form-row">
                 <div className="form-group col-md-4">

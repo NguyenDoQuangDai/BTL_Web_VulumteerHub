@@ -1,20 +1,80 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faMapMarkerAlt, faFileAlt, faHourglassHalf, faPlay, faStop, faImage } from '@fortawesome/free-solid-svg-icons';
+import { faMapMarkerAlt, faFileAlt, faHourglassHalf, faPlay, faStop } from '@fortawesome/free-solid-svg-icons';
 import { eventService } from '../../services/apiService';
 import { useAuth } from '../../contexts/AuthContext';
+import './CreateEventForm.css';
+
+const parseToTimestamp = (val) => {
+  if (!val) return NaN;
+  const s = String(val).trim();
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?$/);
+  if (!m) return NaN;
+  const day = parseInt(m[1], 10);
+  const month = parseInt(m[2], 10) - 1;
+  const year = parseInt(m[3], 10);
+  const hour = parseInt(m[4] || '0', 10);
+  const minute = parseInt(m[5] || '0', 10);
+  const d = new Date(year, month, day, hour, minute, 0, 0);
+  return d.getTime();
+};
 
 const toIso = (val) => {
-  try {
-    return new Date(val).toISOString();
-  } catch (e) {
-    return null;
-  }
+  const ts = parseToTimestamp(val);
+  if (isNaN(ts)) return null;
+  return new Date(ts).toISOString();
+};
+
+const formatFromDatetimeLocal = (dtLocal) => {
+  if (!dtLocal) return '';
+  const m = String(dtLocal).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+  if (!m) return '';
+  const y = m[1], mo = m[2], d = m[3], h = m[4], mi = m[5];
+  return `${d}/${mo}/${y} ${h}:${mi}`;
 };
 
 const CreateEventForm = ({ onClose, onCreated }) => {
   const isMounted = useRef(true);
   const { user } = useAuth();
+  const deadlinePickerRef = useRef(null);
+  const startPickerRef = useRef(null);
+  const endPickerRef = useRef(null);
+
+  const openPicker = (ref) => {
+    if (!ref || !ref.current) return;
+    const el = ref.current;
+    try {
+      if (typeof el.showPicker === 'function') {
+        el.showPicker();
+        return;
+      }
+    } catch (e) {}
+    // fallback cho các browser cũ
+    const prev = {
+      display: el.style.display,
+      position: el.style.position,
+      left: el.style.left,
+      width: el.style.width,
+      height: el.style.height,
+      opacity: el.style.opacity
+    };
+    el.style.display = 'block';
+    el.style.position = 'absolute';
+    el.style.left = '-9999px';
+    el.style.width = '1px';
+    el.style.height = '1px';
+    el.style.opacity = '0';
+    el.focus();
+    el.click();
+    setTimeout(() => {
+      el.style.display = prev.display || 'none';
+      el.style.position = prev.position || '';
+      el.style.left = prev.left || '';
+      el.style.width = prev.width || '';
+      el.style.height = prev.height || '';
+      el.style.opacity = prev.opacity || '';
+    }, 800);
+  };
 
   useEffect(() => {
     return () => {
@@ -35,46 +95,117 @@ const CreateEventForm = ({ onClose, onCreated }) => {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
+  const formatDateInput = (raw) => {
+    const digits = String(raw || '').replace(/\D/g, '').slice(0, 12);
+    const parts = [];
+    if (digits.length <= 2) return digits;
+    parts.push(digits.slice(0, 2));
+    if (digits.length <= 4) return `${parts[0]}/${digits.slice(2)}`;
+    parts.push(digits.slice(2, 4));
+    if (digits.length <= 8) return `${parts[0]}/${parts[1]}/${digits.slice(4)}`;
+    parts.push(digits.slice(4, 8));
+    if (digits.length <= 10) return `${parts[0]}/${parts[1]}/${parts[2]} ${digits.slice(8)}`;
+    return `${parts[0]}/${parts[1]}/${parts[2]} ${digits.slice(8,10)}:${digits.slice(10,12)}`;
+  };
+
   const onChange = (e) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    const input = e.target;
+
+    if (name === 'dateDeadline' || name === 'startDate' || name === 'endDate') {
+      // Lấy vị trí con trỏ hiện tại trước khi thay đổi
+      const cursorPos = input.selectionStart;
+
+      // Chỉ giữ lại tối đa 12 chữ số
+      const digits = value.replace(/\D/g, '').slice(0, 12);
+
+      // Format lại theo định dạng dd/mm/yyyy hh:mm
+      const formatted = formatDateInput(digits);
+
+      // Tính vị trí con trỏ mới dựa trên số chữ số đã nhập trước vị trí cũ
+      let digitCountBeforeCursor = 0;
+      for (let i = 0; i < cursorPos; i++) {
+        if (/\d/.test(value[i])) {
+          digitCountBeforeCursor++;
+        }
+      }
+
+      // Đếm số chữ số đã đặt vào formatted trước vị trí tương ứng
+      let newCursorPos = 0;
+      let digitsPlaced = 0;
+      const len = formatted.length;
+
+      for (let i = 0; i < len; i++) {
+        if (/\d/.test(formatted[i])) {
+          digitsPlaced++;
+          if (digitsPlaced > digitCountBeforeCursor) {
+            break;
+          }
+        }
+        newCursorPos = i + 1;
+      }
+
+      // Cập nhật state
+      setForm((prev) => ({ ...prev, [name]: formatted }));
+
+      // Khôi phục vị trí con trỏ sau khi React render lại
+      setTimeout(() => {
+        input.focus();
+        input.setSelectionRange(newCursorPos, newCursorPos);
+      }, 0);
+    } else {
+      setForm((prev) => ({ ...prev, [name]: value }));
+    }
+
     setError(null);
   };
 
-  const handleImageChange = (e) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const files = Array.from(e.target.files);
-      Promise.all(files.map(file => {
-        return new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-      }))
-      .then(results => {
-        setForm(prev => ({ ...prev, images: [...(prev.images || []), ...results] }));
-      });
-    }
+  const restrictDateInput = (e) => {
+    if (e.ctrlKey || e.metaKey) return;
+    const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', 'Home', 'End'];
+    if (allowedKeys.includes(e.key)) return;
+    if (/^[0-9]$/.test(e.key)) return;
+    e.preventDefault();
   };
 
-  const removeImage = (index) => {
-    setForm(prev => ({
-      ...prev,
-      images: prev.images.filter((_, i) => i !== index)
-    }));
+  const handlePickerChange = (pickerName, value) => {
+    const formatted = formatFromDatetimeLocal(value);
+    setForm((prev) => ({ ...prev, [pickerName]: formatted }));
+  };
+
+  const handlePasteDate = (e, name) => {
+    const pasted = (e.clipboardData || window.clipboardData).getData('text');
+    const formatted = formatDateInput(pasted);
+    setForm(prev => ({ ...prev, [name]: formatted }));
+    e.preventDefault();
   };
 
   const validate = () => {
     if (!form.name || !form.dateDeadline || !form.startDate || !form.endDate) {
       return 'Vui lòng nhập đầy đủ các trường bắt buộc.';
     }
-    const dd = new Date(form.dateDeadline).getTime();
-    const sd = new Date(form.startDate).getTime();
-    const ed = new Date(form.endDate).getTime();
-    if (isNaN(dd) || isNaN(sd) || isNaN(ed)) return 'Định dạng ngày/giờ không hợp lệ.';
-    if (sd > ed) return 'Thời gian bắt đầu phải trước hoặc bằng thời gian kết thúc.';
-    if (dd > sd) return 'Hạn đăng ký phải trước hoặc bằng thời gian bắt đầu.';
+
+    const dd = parseToTimestamp(form.dateDeadline);
+    const sd = parseToTimestamp(form.startDate);
+    const ed = parseToTimestamp(form.endDate);
+    const now = Date.now();
+
+    if (isNaN(dd) || isNaN(sd) || isNaN(ed)) {
+      return 'Định dạng ngày/giờ không hợp lệ.';
+    }
+
+    if (dd <= now) {
+      return 'Hạn đăng ký phải lớn hơn thời gian hiện tại.';
+    }
+
+    if (sd > ed) {
+      return 'Thời gian bắt đầu phải trước hoặc bằng thời gian kết thúc.';
+    }
+
+    if (dd > sd) {
+      return 'Hạn đăng ký phải trước hoặc bằng thời gian bắt đầu.';
+    }
+
     return null;
   };
 
@@ -97,7 +228,6 @@ const CreateEventForm = ({ onClose, onCreated }) => {
         dateDeadline: toIso(form.dateDeadline),
         startDate: toIso(form.startDate),
         endDate: toIso(form.endDate)
-        // ownerId, status: backend tự xử lý
       };
 
       const created = await eventService.createEvent(payload);
@@ -179,81 +309,104 @@ const CreateEventForm = ({ onClose, onCreated }) => {
             />
           </div>
 
-          <div className="form-group">
-            <label className="field-label">
-              <FontAwesomeIcon icon={faImage} className="mr-1" />
-              Hình ảnh
-            </label>
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              className="form-control-file"
-              onChange={handleImageChange}
-            />
-            <div className="d-flex flex-wrap mt-2">
-              {form.images && form.images.map((img, index) => (
-                <div key={index} className="position-relative mr-2 mb-2">
-                  <img 
-                    src={img} 
-                    alt={`Preview ${index}`} 
-                    style={{ height: '100px', width: '100px', objectFit: 'cover', borderRadius: '4px' }} 
-                  />
-                  <button
-                    type="button"
-                    className="btn btn-danger btn-sm position-absolute"
-                    style={{ top: 0, right: 0, padding: '0px 5px', fontSize: '12px', lineHeight: '1.2' }}
-                    onClick={() => removeImage(index)}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-
           <div className="form-row">
             <div className="form-group col-md-4">
               <label className="field-label deadline-line">
                 <FontAwesomeIcon icon={faHourglassHalf} className="mr-1 deadline-icon" />
                 Hạn đăng ký *
               </label>
-              <input
-                type="datetime-local"
-                name="dateDeadline"
-                className="form-control"
-                value={form.dateDeadline}
-                onChange={onChange}
-                required
-              />
+              <div className="input-group">
+                <input
+                  type="text"
+                  name="dateDeadline"
+                  className="form-control"
+                  placeholder="dd/mm/yyyy hh:mm"
+                  value={form.dateDeadline}
+                  onChange={onChange}
+                  onKeyDown={restrictDateInput}
+                  onPaste={(e) => handlePasteDate(e, 'dateDeadline')}
+                  required
+                  pattern="^\d{1,2}\/\d{1,2}\/\d{4}(\s+\d{1,2}:\d{2})?$"
+                  title="dd/mm/yyyy hh:mm"
+                />
+                <div className="input-group-append">
+                  <button type="button" className="btn btn-outline-secondary" onClick={() => openPicker(deadlinePickerRef)}>
+                    📅
+                  </button>
+                </div>
+                <input
+                  type="datetime-local"
+                  ref={deadlinePickerRef}
+                  className="datetime-overlay"
+                  onChange={(e) => handlePickerChange('dateDeadline', e.target.value)}
+                />
+              </div>
             </div>
+
             <div className="form-group col-md-4">
               <label className="field-label start-line">
                 <FontAwesomeIcon icon={faPlay} className="mr-1 start-icon" />
                 Bắt đầu *
               </label>
-              <input
-                type="datetime-local"
-                name="startDate"
-                className="form-control"
-                value={form.startDate}
-                onChange={onChange}
-                required
-              />
+              <div className="input-group">
+                <input
+                  type="text"
+                  name="startDate"
+                  className="form-control"
+                  placeholder="dd/mm/yyyy hh:mm"
+                  value={form.startDate}
+                  onChange={onChange}
+                  onKeyDown={restrictDateInput}
+                  onPaste={(e) => handlePasteDate(e, 'startDate')}
+                  required
+                  pattern="^\d{1,2}\/\d{1,2}\/\d{4}(\s+\d{1,2}:\d{2})?$"
+                  title="dd/mm/yyyy hh:mm"
+                />
+                <div className="input-group-append">
+                  <button type="button" className="btn btn-outline-secondary" onClick={() => openPicker(startPickerRef)}>
+                    📅
+                  </button>
+                </div>
+                <input
+                  type="datetime-local"
+                  ref={startPickerRef}
+                  className="datetime-overlay"
+                  onChange={(e) => handlePickerChange('startDate', e.target.value)}
+                />
+              </div>
             </div>
+
             <div className="form-group col-md-4">
               <label className="field-label end-line">
                 <FontAwesomeIcon icon={faStop} className="mr-1 end-icon" />
                 Kết thúc *
               </label>
-              <input
-                type="datetime-local"
-                name="endDate"
-                className="form-control"
-                value={form.endDate}
-                onChange={onChange}
-                required
-              />
+              <div className="input-group">
+                <input
+                  type="text"
+                  name="endDate"
+                  className="form-control"
+                  placeholder="dd/mm/yyyy hh:mm"
+                  value={form.endDate}
+                  onChange={onChange}
+                  onKeyDown={restrictDateInput}
+                  onPaste={(e) => handlePasteDate(e, 'endDate')}
+                  required
+                  pattern="^\d{1,2}\/\d{1,2}\/\d{4}(\s+\d{1,2}:\d{2})?$"
+                  title="dd/mm/yyyy hh:mm"
+                />
+                <div className="input-group-append">
+                  <button type="button" className="btn btn-outline-secondary" onClick={() => openPicker(endPickerRef)}>
+                    📅
+                  </button>
+                </div>
+                <input
+                  type="datetime-local"
+                  ref={endPickerRef}
+                  className="datetime-overlay"
+                  onChange={(e) => handlePickerChange('endDate', e.target.value)}
+                />
+              </div>
             </div>
           </div>
 

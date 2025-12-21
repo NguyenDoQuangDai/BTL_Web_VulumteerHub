@@ -49,6 +49,93 @@ const formatDateTime = (iso) => {
   }
 };
 
+// --- Date helpers copied/adjusted from CreateEventForm ---
+const parseToTimestamp = (val) => {
+  if (!val) return NaN;
+  const s = String(val).trim();
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?$/);
+  if (!m) return NaN;
+  const day = parseInt(m[1], 10);
+  const month = parseInt(m[2], 10) - 1;
+  const year = parseInt(m[3], 10);
+  const hour = parseInt(m[4] || '0', 10);
+  const minute = parseInt(m[5] || '0', 10);
+  const d = new Date(year, month, day, hour, minute, 0, 0);
+  return d.getTime();
+};
+
+const toIso = (val) => {
+  const ts = parseToTimestamp(val);
+  if (isNaN(ts)) return null;
+  return new Date(ts).toISOString();
+};
+
+const formatFromDatetimeLocal = (dtLocal) => {
+  if (!dtLocal) return '';
+  const m = String(dtLocal).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+  if (!m) return '';
+  const y = m[1], mo = m[2], d = m[3], h = m[4], mi = m[5];
+  return `${d}/${mo}/${y} ${h}:${mi}`;
+};
+
+const formatDateInput = (raw) => {
+  const digits = String(raw || '').replace(/\D/g, '').slice(0, 12); // ddmmyyyyhhmm
+  const parts = [];
+  if (digits.length <= 2) return digits;
+  parts.push(digits.slice(0, 2));
+  if (digits.length <= 4) return `${parts[0]}/${digits.slice(2)}`;
+  parts.push(digits.slice(2, 4));
+  if (digits.length <= 8) return `${parts[0]}/${parts[1]}/${digits.slice(4)}`;
+  parts.push(digits.slice(4, 8));
+  if (digits.length <= 10) return `${parts[0]}/${parts[1]}/${parts[2]} ${digits.slice(8)}`;
+  return `${parts[0]}/${parts[1]}/${parts[2]} ${digits.slice(8,10)}:${digits.slice(10,12)}`;
+};
+
+const isoToDisplay = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+const restrictDateInput = (e) => {
+  if (e.ctrlKey || e.metaKey) return;
+  const allowedKeys = ['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', 'Home', 'End'];
+  if (allowedKeys.includes(e.key)) return;
+  if (/^[0-9]$/.test(e.key)) return;
+  e.preventDefault();
+};
+
+const openPicker = (ref) => {
+  if (!ref || !ref.current) return;
+  const el = ref.current;
+  try {
+    if (typeof el.showPicker === 'function') {
+      el.showPicker();
+      return;
+    }
+  } catch (e) {}
+  const prev = { display: el.style.display, position: el.style.position, left: el.style.left, width: el.style.width, height: el.style.height, opacity: el.style.opacity };
+  el.style.display = 'block';
+  el.style.position = 'absolute';
+  el.style.left = '-9999px';
+  el.style.width = '1px';
+  el.style.height = '1px';
+  el.style.opacity = '0';
+  el.focus();
+  el.click();
+  setTimeout(() => {
+    el.style.display = prev.display || 'none';
+    el.style.position = prev.position || '';
+    el.style.left = prev.left || '';
+    el.style.width = prev.width || '';
+    el.style.height = prev.height || '';
+    el.style.opacity = prev.opacity || '';
+  }, 800);
+};
+// --- end helpers ---
+
 const EventCard = ({ evt }) => {
   const history = useHistory();
   const { user: authUser } = useAuth();
@@ -110,13 +197,17 @@ const EventCard = ({ evt }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
+  const deadlinePickerRefEdit = useRef(null);
+  const startPickerRefEdit = useRef(null);
+  const endPickerRefEdit = useRef(null);
+
   const [editForm, setEditForm] = useState({
     name: evt.name || '',
     description: evt.description || '',
     location: evt.location || '',
-    dateDeadline: evt.dateDeadline || '',
-    startDate: evt.startDate || '',
-    endDate: evt.endDate || '',
+    dateDeadline: isoToDisplay(evt.dateDeadline || evt.dateDeadline),
+    startDate: isoToDisplay(evt.startDate || evt.startDate),
+    endDate: isoToDisplay(evt.endDate || evt.endDate),
     images: evt.images || (evt.image || evt.imageUrl ? [evt.image || evt.imageUrl] : []),
   });
 
@@ -201,7 +292,7 @@ const EventCard = ({ evt }) => {
         setLoadingReg(false);
     }
   };
-
+/*
   const handleImageChange = (e) => {
     if (e.target.files && e.target.files.length > 0) {
       const files = Array.from(e.target.files);
@@ -226,7 +317,7 @@ const EventCard = ({ evt }) => {
     }));
   };
 
-
+*/
 
 
 
@@ -255,21 +346,65 @@ const EventCard = ({ evt }) => {
 
   const registerDisabled = !registered && deadlinePassed;
   const cancelDisabled = registered && startPassed;
+
   const hasUnsavedChanges = () => {
     return (
       editForm.name !== (evt.name || '') ||
       editForm.description !== (evt.description || '') ||
       editForm.location !== (evt.location || '') ||
-      editForm.dateDeadline !== (evt.dateDeadline || '') ||
-      editForm.startDate !== (evt.startDate || '') ||
-      editForm.endDate !== (evt.endDate || '') ||
+      editForm.dateDeadline !== (isoToDisplay(evt.dateDeadline || evt.dateDeadline) || '') ||
+      editForm.startDate !== (isoToDisplay(evt.startDate || evt.startDate) || '') ||
+      editForm.endDate !== (isoToDisplay(evt.endDate || evt.endDate) || '') ||
       JSON.stringify(editForm.images) !== JSON.stringify(evt.images || (evt.image ? [evt.image] : []))
     );
   };
 
+  const handlePickerChangeEdit = (pickerName, value) => {
+    const formatted = formatFromDatetimeLocal(value);
+    setEditForm((prev) => ({ ...prev, [pickerName]: formatted }));
+  };
+
   const handleEditFormChange = (e) => {
     const { name, value } = e.target;
-    setEditForm((prev) => ({ ...prev, [name]: value }));
+    const input = e.target;
+
+    if (name === 'dateDeadline' || name === 'startDate' || name === 'endDate') {
+      const cursorPos = input.selectionStart;
+      const digits = value.replace(/\D/g, '').slice(0, 12);
+      const formatted = formatDateInput(digits);
+
+      let digitCountBeforeCursor = 0;
+      for (let i = 0; i < cursorPos; i++) {
+        if (/\d/.test(value[i])) digitCountBeforeCursor++;
+      }
+
+      let newCursorPos = 0;
+      let digitsPlaced = 0;
+      const len = formatted.length;
+      for (let i = 0; i < len; i++) {
+        if (/\d/.test(formatted[i])) {
+          digitsPlaced++;
+          if (digitsPlaced > digitCountBeforeCursor) break;
+        }
+        newCursorPos = i + 1;
+      }
+
+      setEditForm((prev) => ({ ...prev, [name]: formatted }));
+
+      setTimeout(() => {
+        input.focus();
+        input.setSelectionRange(newCursorPos, newCursorPos);
+      }, 0);
+    } else {
+      setEditForm((prev) => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const handlePasteDateEdit = (e, name) => {
+    const pasted = (e.clipboardData || window.clipboardData).getData('text');
+    const formatted = formatDateInput(pasted);
+    setEditForm(prev => ({ ...prev, [name]: formatted }));
+    e.preventDefault();
   };
 
   const handleEditClose = () => {
@@ -287,9 +422,9 @@ const EventCard = ({ evt }) => {
           name: editForm.name,
           description: editForm.description,
           location: editForm.location,
-          dateDeadline: new Date(editForm.dateDeadline).toISOString(),
-          startDate: new Date(editForm.startDate).toISOString(),
-          endDate: new Date(editForm.endDate).toISOString(),
+          dateDeadline: toIso(editForm.dateDeadline),
+          startDate: toIso(editForm.startDate),
+          endDate: toIso(editForm.endDate),
         })
       );
       setShowEditForm(false);
@@ -484,141 +619,158 @@ const EventCard = ({ evt }) => {
       )}
 
       {showEditForm && createPortal(
-        <div className="confirm-overlay" onClick={handleEditClose}>
-          <div className="confirm-card" style={{ width: '100%', maxWidth: '500px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="d-flex justify-content-between align-items-center mb-3">
-              <h5 className="mb-0">Sửa sự kiện</h5>
-              <button type="button" className="btn btn-outline-secondary btn-sm" onClick={handleEditClose}>
-                Đóng
-              </button>
-            </div>
-
-            <form>
-              <div className="form-group">
-                <label className="field-label event-title">Tên sự kiện *</label>
-                <input
-                  type="text"
-                  name="name"
-                  className="form-control"
-                  value={editForm.name}
-                  onChange={handleEditFormChange}
-                  required
-                />
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1" onClick={handleEditClose}>
+          <div className="modal-dialog modal-lg" onClick={e => e.stopPropagation()}>
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Sửa sự kiện</h5>
+                <button type="button" className="btn-close" onClick={handleEditClose}></button>
               </div>
+              <div className="modal-body">
+                <div className="card mb-0" style={{ boxShadow: 'none', transform: 'none' }}>
+                  <div className="card-body">
+                    <form>
+                      <div className="form-group">
+                        <label className="field-label event-title">Tên sự kiện *</label>
+                        <input
+                          type="text"
+                          name="name"
+                          className="form-control"
+                          value={editForm.name}
+                          onChange={handleEditFormChange}
+                          required
+                        />
+                      </div>
 
-              <div className="form-group">
-                <label className="field-label location-line">
-                  <FontAwesomeIcon icon={faMapMarkerAlt} className="mr-1 location-icon" />
-                  Địa điểm
-                </label>
-                <input
-                  type="text"
-                  name="location"
-                  className="form-control"
-                  placeholder="Ví dụ: Nhà văn hóa X, Quận 1"
-                  value={editForm.location}
-                  onChange={handleEditFormChange}
-                />
-              </div>
+                      <div className="form-group">
+                        <label className="field-label location-line">
+                          <FontAwesomeIcon icon={faMapMarkerAlt} className="mr-1 location-icon" />
+                          Địa điểm
+                        </label>
+                        <input
+                          type="text"
+                          name="location"
+                          className="form-control"
+                          placeholder="Ví dụ: Nhà văn hóa X, Quận 1"
+                          value={editForm.location}
+                          onChange={handleEditFormChange}
+                        />
+                      </div>
 
-              <div className="form-group">
-                <label className="field-label desc-line">
-                  <FontAwesomeIcon icon={faFileAlt} className="mr-1 desc-icon" />
-                  Mô tả
-                </label>
-                <textarea
-                  name="description"
-                  className="form-control"
-                  rows="3"
-                  value={editForm.description}
-                  onChange={handleEditFormChange}
-                />
-              </div>
+                      <div className="form-group">
+                        <label className="field-label desc-line">
+                          <FontAwesomeIcon icon={faFileAlt} className="mr-1 desc-icon" />
+                          Mô tả
+                        </label>
+                        <textarea
+                          name="description"
+                          className="form-control"
+                          rows="3"
+                          value={editForm.description}
+                          onChange={handleEditFormChange}
+                        />
+                      </div>
 
-              <div className="form-group">
-                <label className="field-label">
-                  <FontAwesomeIcon icon={faImage} className="mr-1" />
-                  Hình ảnh
-                </label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="form-control-file"
-                  onChange={handleImageChange}
-                />
-                <div className="d-flex flex-wrap mt-2">
-                  {editForm.images && editForm.images.map((img, index) => (
-                    <div key={index} className="position-relative mr-2 mb-2">
-                      <img 
-                        src={img} 
-                        alt={`Preview ${index}`} 
-                        style={{ height: '100px', width: '100px', objectFit: 'cover', borderRadius: '4px' }} 
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-danger btn-sm position-absolute"
-                        style={{ top: 0, right: 0, padding: '0px 5px', fontSize: '12px', lineHeight: '1.2' }}
-                        onClick={() => removeImage(index)}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
+                      <div className="form-row">
+                        <div className="form-group col-md-4">
+                          <label className="field-label deadline-line">
+                            <FontAwesomeIcon icon={faHourglassHalf} className="mr-1 deadline-icon" />
+                            Hạn đăng ký *
+                          </label>
+                          <div className="input-group">
+                            <input
+                              type="text"
+                              name="dateDeadline"
+                              className="form-control"
+                              placeholder="dd/mm/yyyy hh:mm"
+                              value={editForm.dateDeadline}
+                              onChange={handleEditFormChange}
+                              onKeyDown={restrictDateInput}
+                              onPaste={(e) => handlePasteDateEdit(e, 'dateDeadline')}
+                              required
+                            />
+                            <div className="input-group-append">
+                              <button type="button" className="btn btn-outline-secondary" onClick={() => openPicker(deadlinePickerRefEdit)}>
+                                📅
+                              </button>
+                            </div>
+                            <input
+                              type="datetime-local"
+                              ref={deadlinePickerRefEdit}
+                              className="datetime-overlay"
+                              onChange={(e) => handlePickerChangeEdit('dateDeadline', e.target.value)}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="form-group col-md-4">
+                          <label className="field-label start-line">
+                            <FontAwesomeIcon icon={faPlay} className="mr-1 start-icon" />
+                            Bắt đầu *
+                          </label>
+                          <div className="input-group">
+                            <input
+                              type="text"
+                              name="startDate"
+                              className="form-control"
+                              placeholder="dd/mm/yyyy hh:mm"
+                              value={editForm.startDate}
+                              onChange={handleEditFormChange}
+                              onKeyDown={restrictDateInput}
+                              onPaste={(e) => handlePasteDateEdit(e, 'startDate')}
+                              required
+                            />
+                            <div className="input-group-append">
+                              <button type="button" className="btn btn-outline-secondary" onClick={() => openPicker(startPickerRefEdit)}>
+                                📅
+                              </button>
+                            </div>
+                            <input
+                              type="datetime-local"
+                              ref={startPickerRefEdit}
+                              className="datetime-overlay"
+                              onChange={(e) => handlePickerChangeEdit('startDate', e.target.value)}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="form-group col-md-4">
+                          <label className="field-label end-line">
+                            <FontAwesomeIcon icon={faStop} className="mr-1 end-icon" />
+                            Kết thúc *
+                          </label>
+                          <div className="input-group">
+                            <input
+                              type="text"
+                              name="endDate"
+                              className="form-control"
+                              placeholder="dd/mm/yyyy hh:mm"
+                              value={editForm.endDate}
+                              onChange={handleEditFormChange}
+                              onKeyDown={restrictDateInput}
+                              onPaste={(e) => handlePasteDateEdit(e, 'endDate')}
+                              required
+                            />
+                            <div className="input-group-append">
+                              <button type="button" className="btn btn-outline-secondary" onClick={() => openPicker(endPickerRefEdit)}>
+                                📅
+                              </button>
+                            </div>
+                            <input
+                              type="datetime-local"
+                              ref={endPickerRefEdit}
+                              className="datetime-overlay"
+                              onChange={(e) => handlePickerChangeEdit('endDate', e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </form>
+                  </div>
                 </div>
               </div>
-
-              <div className="form-row">
-                <div className="form-group col-md-4">
-                  <label className="field-label deadline-line">
-                    <FontAwesomeIcon icon={faHourglassHalf} className="mr-1 deadline-icon" />
-                    Hạn đăng ký *
-                  </label>
-                  <input
-                    type="datetime-local"
-                    name="dateDeadline"
-                    className="form-control"
-                    value={editForm.dateDeadline ? editForm.dateDeadline.slice(0, 16) : ''}
-                    onChange={handleEditFormChange}
-                    required
-                  />
-                </div>
-                <div className="form-group col-md-4">
-                  <label className="field-label start-line">
-                    <FontAwesomeIcon icon={faPlay} className="mr-1 start-icon" />
-                    Bắt đầu *
-                  </label>
-                  <input
-                    type="datetime-local"
-                    name="startDate"
-                    className="form-control"
-                    value={editForm.startDate ? editForm.startDate.slice(0, 16) : ''}
-                    onChange={handleEditFormChange}
-                    required
-                  />
-                </div>
-                <div className="form-group col-md-4">
-                  <label className="field-label end-line">
-                    <FontAwesomeIcon icon={faStop} className="mr-1 end-icon" />
-                    Kết thúc *
-                  </label>
-                  <input
-                    type="datetime-local"
-                    name="endDate"
-                    className="form-control"
-                    value={editForm.endDate ? editForm.endDate.slice(0, 16) : ''}
-                    onChange={handleEditFormChange}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="text-right mt-3">
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary mr-2"
-                  onClick={handleEditClose}
-                >
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={handleEditClose}>
                   Hủy
                 </button>
                 <button
@@ -630,7 +782,7 @@ const EventCard = ({ evt }) => {
                   Lưu thay đổi
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>,
         document.body
