@@ -66,12 +66,12 @@ const AdminDashboard = () => {
   return (
     <div className='container-fluid'>
       <div className='row bg-white py-3'>
-        <div className='col-md-2'>
+        <div className='col-md-custom-sidebar'>
           <Link to='/'>
             <img className='w-75 text-center' src='/volumteerhub_logo_final.png' alt='VolumteerHub' />
           </Link>
         </div>
-        <div className='col-md-10 d-flex align-items-center justify-content-between'>
+        <div className='col-md-custom-content d-flex align-items-center justify-content-between'>
           <h5>Volunteer Register List</h5>
           <Link to="/home" className="btn btn-outline-danger">
             Close
@@ -79,11 +79,11 @@ const AdminDashboard = () => {
         </div>
       </div>
       <div className='row bg-white'>
-        <div className='col-md-2 admin-sidebar' >
+        <div className='col-md-custom-sidebar admin-sidebar' >
           <AdminSidebar />
         </div>
         <div
-          className='col-md-10'
+          className='col-md-custom-content'
           style={{ backgroundColor: '#F4F7FC' }}
         >
           <RegisteredDataTables />

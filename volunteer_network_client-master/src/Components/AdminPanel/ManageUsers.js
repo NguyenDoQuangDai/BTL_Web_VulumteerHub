@@ -45,14 +45,19 @@ const ManageUsers = () => {
         users = response;
       }
 
-      const mappedUsers = users.map(u => ({
-        _id: u.id,
-        name: u.fullName || `${u.lastname} ${u.firstname}`,
-        email: u.email || 'N/A',
-        username: u.username,
-        isLocked: !u.enabled,
-        role: u.role || (Array.isArray(u.roles) ? u.roles[0] : 'User')
-      }));
+      const mappedUsers = users.map(u => {
+        let role = u.role || (Array.isArray(u.roles) ? u.roles[0] : 'USER');
+        role = role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
+        
+        return {
+          _id: u.id,
+          name: u.fullName || `${u.lastname} ${u.firstname}`,
+          email: u.email || 'N/A',
+          username: u.username,
+          isActive: u.isActive ?? true,
+          role: role
+        };
+      });
       setUserList(mappedUsers);
     } catch (error) {
       console.error("Failed to load users", error);
@@ -79,11 +84,11 @@ const ManageUsers = () => {
   const filteredUsers = userList.filter((u) => {
     const matchesSearch = searchText === '' ||
       u.name.toLowerCase().includes(searchText.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchText.toLowerCase()) ||
+      // u.email.toLowerCase().includes(searchText.toLowerCase()) ||
       u.username.toLowerCase().includes(searchText.toLowerCase());
     const matchesStatus = statusFilter === '' ||
-      (statusFilter === 'active' && !u.isLocked) ||
-      (statusFilter === 'locked' && u.isLocked);
+      (statusFilter === 'active' && u.isActive) ||
+      (statusFilter === 'locked' && !u.isActive);
     const matchesRole = roleFilter === '' || u.role === roleFilter;
     return matchesSearch && matchesStatus && matchesRole;
   });
@@ -111,12 +116,17 @@ const ManageUsers = () => {
     if (!user) return;
 
     try {
-      const newEnabledStatus = user.isLocked; 
-      await userService.updateUser(_id, { enabled: newEnabledStatus });
+      if (user.isActive) {
+        // User is currently active, so deactivate them
+        await userService.deactivateUser(_id);
+      } else {
+        // User is currently locked, so activate them
+        await userService.activateUser(_id);
+      }
       
       setUserList(
         userList.map((u) =>
-          u._id === _id ? { ...u, isLocked: !u.isLocked } : u
+          u._id === _id ? { ...u, isActive: !u.isActive } : u
         )
       );
     } catch (error) {
@@ -129,7 +139,7 @@ const ManageUsers = () => {
     const ids = Array.from(selectedIds);
     for (const id of ids) {
       try {
-        await userService.updateUser(id, { enabled: false });
+        await userService.deactivateUser(id);
       } catch (error) {
         console.error(`Failed to lock user ${id}`, error);
       }
@@ -142,7 +152,7 @@ const ManageUsers = () => {
     const ids = Array.from(selectedIds);
     for (const id of ids) {
       try {
-        await userService.updateUser(id, { enabled: true });
+        await userService.activateUser(id);
       } catch (error) {
         console.error(`Failed to unlock user ${id}`, error);
       }
@@ -151,8 +161,19 @@ const ManageUsers = () => {
     setSelectedIds(new Set());
   };
 
-  const updateUserRole = (_id, role) => {
-    setUserList((list) => list.map((u) => (u._id === _id ? { ...u, role } : u)));
+  const updateUserRole = async (_id, role) => {
+    try {
+      setLoading(true);
+      await userService.setUserRole(_id, role.toUpperCase());
+      setUserList((list) => list.map((u) => (u._id === _id ? { ...u, role } : u)));
+    } catch (error) {
+      console.error("Failed to update user role", error);
+      alert("Không thể cập nhật vai trò người dùng. Vui lòng thử lại.");
+      // Reload to revert changes
+      await loadUsers();
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleRoleChangeRequest = (_id, newRole) => {
@@ -163,9 +184,9 @@ const ManageUsers = () => {
     }
   };
 
-  const confirmRoleChange = () => {
+  const confirmRoleChange = async () => {
     if (pendingRoleChange) {
-      updateUserRole(pendingRoleChange._id, pendingRoleChange.newRole);
+      await updateUserRole(pendingRoleChange._id, pendingRoleChange.newRole);
       setPendingRoleChange(null);
       setShowRoleConfirm(false);
     }
@@ -189,13 +210,13 @@ const ManageUsers = () => {
   const exportCSV = () => {
     const selectedUsers = userList.filter((u) => selectedIds.has(u._id));
     const csv = [
-      ['#', 'Name', 'Email', 'Username', 'Status'],
+      ['#', 'Name', 'Username', 'Status'],
       ...selectedUsers.map((u) => [
         u._id,
         u.name,
-        u.email,
+        // u.email,
         u.username,
-        u.isLocked ? 'Đã khóa' : 'Hoạt động',
+        u.isActive ? 'Hoạt động' : 'Đã khóa',
       ]),
     ]
       .map((row) => row.map((cell) => `"${cell}"`).join(','))
@@ -219,7 +240,6 @@ const ManageUsers = () => {
     setShowExportDialog(false);
   };
 
-  // Delete user when admin click on delete button and update the dashboard
   const deleteUserAdmin = (_id) => {
     setUserList(userList.filter((u) => u._id !== _id));
   };
@@ -258,7 +278,7 @@ const ManageUsers = () => {
                 <input
                   type='text'
                   className='form-control border-left-0'
-                  placeholder='Tìm kiếm theo tên, email hoặc username...'
+                  placeholder='Tìm kiếm theo họ, tên, username...'
                   value={searchText}
                   onChange={(e) => setSearchText(e.target.value)}
                 />
@@ -306,7 +326,7 @@ const ManageUsers = () => {
                   </th>
                   <th scope='col'>#</th>
                   <th scope='col'>Họ và tên</th>
-                  <th scope='col'>Email</th>
+                  {/* <th scope='col'>Email</th> */}
                   <th scope='col'>Username</th>
                   <th scope='col'>Trạng thái</th>
                   <th scope='col'>Vai trò</th>
@@ -333,11 +353,11 @@ const ManageUsers = () => {
                       <td>
                         <div className="font-weight-bold">{userItem.name}</div>
                       </td>
-                      <td>{userItem.email}</td>
+                      {/* <td>{userItem.email}</td> */}
                       <td>{userItem.username}</td>
                       <td>
-                        <span className={`user-status-badge ${userItem.isLocked ? 'locked' : 'active'}`}>
-                          {userItem.isLocked ? 'Đã khóa' : 'Hoạt động'}
+                        <span className={`user-status-badge ${userItem.isActive ? 'active' : 'locked'}`}>
+                          {userItem.isActive ? 'Hoạt động' : 'Đã khóa'}
                         </span>
                       </td>
                       <td>
@@ -354,10 +374,10 @@ const ManageUsers = () => {
                       <td className="text-right">
                         <button
                           onClick={() => toggleLockUser(userItem._id)}
-                          className={`btn btn-sm action-btn ${userItem.isLocked ? 'btn-outline-success' : 'btn-outline-warning'}`}
-                          title={userItem.isLocked ? 'Mở khóa' : 'Khóa'}
+                          className={`btn btn-sm action-btn ${userItem.isActive ? 'btn-outline-warning' : 'btn-outline-success'}`}
+                          title={userItem.isActive ? 'Khóa' : 'Mở khóa'}
                         >
-                          <FontAwesomeIcon icon={userItem.isLocked ? faLockOpen : faLock} />
+                          <FontAwesomeIcon icon={userItem.isActive ? faLock : faLockOpen} />
                         </button>
                         <button
                           onClick={() => deleteUserAdmin(userItem._id)}
@@ -371,7 +391,7 @@ const ManageUsers = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan='8' className='text-center py-5'>
+                    <td colSpan='7' className='text-center py-5'>
                       <div className="text-muted">
                         <FontAwesomeIcon icon={faSearch} size="3x" className="mb-3 opacity-50" />
                         <p>Không tìm thấy người dùng nào phù hợp.</p>

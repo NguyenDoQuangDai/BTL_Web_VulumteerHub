@@ -31,11 +31,11 @@ const Sidebar = () => {
             <FontAwesomeIcon icon={faUsers} /> <span>Quản lý người dùng</span>
           </Link>
         </li>
-        <li>
+        {/* <li>
           <Link to='/admin/registrations' className='text-dark'>
             <FontAwesomeIcon icon={faClipboardList} /> <span>Danh sách đăng ký</span>
           </Link>
-        </li>
+        </li> */}
       </ul>
     </div>
   );
