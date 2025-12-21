@@ -48,15 +48,8 @@ const Header = () => {
             <Link to='/events' className='nav-link'>
               Events
             </Link>
-<<<<<<< HEAD
-            {/* Forum tab removed */}
-            {/* If user logged in show User Dashboard */}
-=======
-            <Link to='/forum' className='nav-link'>
-              Forum
-            </Link>
-            
->>>>>>> 0dcca80fbfe6dd1712e3480b7cddd56324e3ddff
+
+            {/* Forum tab intentionally removed */}
             {isAuthenticated && (
               <Link to='/userDashboard' className='nav-link'>
                 <button type='button' className='btn btn-info w-100'>
