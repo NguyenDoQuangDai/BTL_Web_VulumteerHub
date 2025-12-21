@@ -18,6 +18,7 @@ import EventsPage from './Pages/Events/EventsPage';
 import EventChannelPage from './Pages/EventChannel/EventChannelPage';
 import Forum from './Components/Forum/Forum';
 import Unauthorized from './Components/Unauthorized/Unauthorized';
+import SettingsPage from './Components/Setting/settingsPage';
 import { AuthProvider } from './contexts/AuthContext';
 
 // ========================================================================================
@@ -56,6 +57,10 @@ function App() {
 
           <Route exact path='/forum'>
             <Forum />
+          </Route>
+
+          <Route exact path='/settings'>
+            <SettingsPage />
           </Route>
 
           <PrivateRoute exact path='/userDashboard'>

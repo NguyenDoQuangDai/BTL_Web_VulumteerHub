@@ -5,6 +5,7 @@ import { Link, useHistory } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faBell } from '@fortawesome/free-solid-svg-icons';
+import { faCog } from '@fortawesome/free-solid-svg-icons';
 //=============================================================================
 
 const Header = () => {
@@ -89,6 +90,9 @@ const Header = () => {
             )}
             <Link to='/notifications' className='nav-link' title="Thông báo">
               <FontAwesomeIcon icon={faBell} size="lg" className="text-secondary" />
+            </Link>
+            <Link to='/settings' className='nav-link' title="Cài đặt">
+              <FontAwesomeIcon icon={faCog} size="lg" className="text-secondary" />
             </Link>
           </div>
         </div>

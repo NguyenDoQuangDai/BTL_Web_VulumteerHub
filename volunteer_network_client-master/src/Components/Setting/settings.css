@@ -1,0 +1,79 @@
+.settings-sidebar {
+  background-color: #ffffff;
+  min-height: 80vh;
+  border-right: 1px solid #e1e4e8;
+}
+
+.settings-sidebar ul {
+  margin: 0;
+  padding: 0;
+}
+
+.settings-sidebar li {
+  margin-bottom: 8px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.settings-sidebar li.active {
+  background-color: #e8f4f8;
+}
+
+.settings-sidebar .sidebar-link {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  width: 100%;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  font-size: 15px;
+}
+
+.settings-sidebar .sidebar-link:hover {
+  background-color: #f6f8fa;
+}
+
+.settings-sidebar li.active .sidebar-link {
+  color: #0366d6;
+  font-weight: 600;
+}
+
+.settings-sidebar .sidebar-link svg {
+  margin-right: 12px;
+  font-size: 18px;
+}
+
+.settings-content {
+  padding: 20px;
+  min-height: 80vh;
+}
+
+.notification-status .status-item {
+  display: flex;
+  align-items: center;
+  border: 1px solid transparent;
+}
+
+.notification-status .status-item:first-child {
+  border-color: #c3e6cb;
+}
+
+.notification-status .status-item:nth-child(2) {
+  border-color: #c3e6cb;
+}
+
+.notification-status .status-item:nth-child(3) {
+  border-color: #c3e6cb;
+}
+
+.d-flex.gap-3 > * {
+  margin-right: 1rem;
+}
+
+.d-flex.gap-3 > *:last-child {
+  margin-right: 0;
+}
