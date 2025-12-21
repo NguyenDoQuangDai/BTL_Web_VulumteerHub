@@ -84,7 +84,7 @@ const ManageEvents = () => {
       name.toLowerCase().includes(searchText.toLowerCase()) ||
       location.toLowerCase().includes(searchText.toLowerCase());
     const matchesStatus = statusFilter === '' || e.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    return matchesSearch && matchesStatus && e.status !== 'DRAFT';
   });
 
   const toggleSelectAll = () => {
