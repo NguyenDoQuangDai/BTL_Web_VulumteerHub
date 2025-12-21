@@ -40,10 +40,12 @@ function App() {
           </Route>
 
           <Route exact path='/login'>
-            <>
-              <Login />
+            <div className="d-flex flex-column min-vh-100">
+              <div className="flex-grow-1">
+                <Login />
+              </div>
               <Footer />
-            </>
+            </div>
           </Route>
 
           <PrivateRoute path='/events/:id'>
@@ -73,11 +75,13 @@ function App() {
           </Route>
 
           <PrivateRoute exact path='/userDashboard'>
-            <>
+            <div className="d-flex flex-column min-vh-100">
               <Header />
-              <UserDashboard />
+              <div className="flex-grow-1">
+                <UserDashboard />
+              </div>
               <Footer />
-            </>
+            </div>
           </PrivateRoute>
 
           <Route exact path='/admin/dashboard'>

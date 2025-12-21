@@ -122,9 +122,11 @@ export const eventService = {
 
   // Create new event
   createEvent: async (eventData) => {
+    const payload = Object.assign({}, eventData);
+    if (!payload.status) payload.status = 'PENDING';
     return await apiRequest(API_ENDPOINTS.EVENTS.CREATE, {
       method: 'POST',
-      body: JSON.stringify(eventData),
+      body: JSON.stringify(payload),
     });
   },
 

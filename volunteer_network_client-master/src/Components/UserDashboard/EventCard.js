@@ -616,14 +616,17 @@ const EventCard = ({ evt }) => {
               type="button"
               className={`btn btn-sm w-100 ${
                 registrationStatus === 'REJECTED' ? 'btn-secondary' :
+                (registered && registrationStatus === 'PENDING') ? 'btn-outline-warning' :
                 registered ? 'btn-outline-danger' : 
                 (evt.status !== 'APPROVED') ? 'btn-secondary' : 'btn-primary'
               }`}
               onClick={handleRegister}
               disabled={loadingReg || registrationStatus === 'REJECTED' || (!registered && evt.status !== 'APPROVED')}
+              title={registered && registrationStatus === 'PENDING' ? 'Hủy đăng ký' : ''}
             >
               {loadingReg ? 'Đang xử lý...' : 
                registrationStatus === 'REJECTED' ? 'Đã bị từ chối' :
+               (registered && registrationStatus === 'PENDING') ? 'Chờ duyệt' :
                (registered ? 'Hủy đăng ký' : 
                 (evt.status !== 'APPROVED' ? 'Không thể đăng ký' : 'Đăng ký tham gia')
                )}

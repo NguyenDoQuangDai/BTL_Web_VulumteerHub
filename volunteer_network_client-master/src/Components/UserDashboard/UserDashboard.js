@@ -3,7 +3,6 @@ import EventCard from './EventCard';
 import { useAuth } from '../../contexts/AuthContext';
 import UsersTasks from './UsersTasks';
 import './UserDashboard.css';
-import PreLoader from '../PreLoader/PreLoader';
 import { registrationService, eventService, userService } from '../../services/apiService';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEdit, faCamera, faTimes } from '@fortawesome/free-solid-svg-icons';
@@ -92,10 +91,32 @@ const UserDashboard = () => {
       
       try {
         setLoading(true);
-        const registrations = await registrationService.getUserRegistrations();
+        const resp = await registrationService.getUserRegistrations();
+        let registrations = [];
+        if (!resp) registrations = [];
+        else if (Array.isArray(resp)) registrations = resp;
+        else if (resp._embedded && resp._embedded.registrations) registrations = resp._embedded.registrations;
+        else if (resp.content) registrations = resp.content;
+        else registrations = [];
+
         // Filter only approved registrations
         const approvedRegistrations = registrations.filter(reg => reg.status === 'APPROVED' || reg.status === 'COMPLETED');
-        setUserRegistrations(approvedRegistrations);
+
+        // Attach full event objects to registrations when possible so we can render EventCard
+        const regsWithEvents = await Promise.all(approvedRegistrations.map(async (reg) => {
+          try {
+            const eventId = reg.eventId || (reg.event && (reg.event.id || reg.event._id));
+            if (eventId) {
+              const evt = await eventService.getEvent(eventId);
+              return { ...reg, event: evt };
+            }
+          } catch (e) {
+            // ignore fetch errors and return original registration
+          }
+          return reg;
+        }));
+
+        setUserRegistrations(regsWithEvents);
         setError(null);
       } catch (err) {
         console.error('Error fetching user registrations:', err);
@@ -157,7 +178,7 @@ const UserDashboard = () => {
   if (loading || !currentUser) {
     return (
       <div className='container mt-5'>
-        <PreLoader visibility="block" />
+        <div className="text-center py-5"><div className="spinner-border text-primary" role="status"><span className="sr-only">Loading...</span></div></div>
       </div>
     );
   }

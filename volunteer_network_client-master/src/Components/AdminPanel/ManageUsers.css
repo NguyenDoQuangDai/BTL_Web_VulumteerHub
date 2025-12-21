@@ -27,6 +27,8 @@
   z-index: 100;
   background-color: white;
   padding: 10px 0;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .manage-users-table thead th {
@@ -35,6 +37,19 @@
   color: #495057;
   font-weight: 600;
   vertical-align: middle;
+}
+
+/* Responsive tweaks */
+@media (max-width: 767.98px) {
+  .manage-users-wrapper { padding: 12px; }
+  .manage-users-filters { position: static; padding: 8px 0; }
+  .manage-users-filters .input-group, .manage-users-filters > div { width: 100%; }
+  .manage-users-table thead { display: none; }
+  .manage-users-table tbody td { display: block; width: 100%; box-sizing: border-box; }
+  .manage-users-table tbody tr { display: block; margin-bottom: 12px; border-bottom: 1px solid #eee; }
+  .manage-users-table tbody td.text-right { text-align: left; margin-top: 8px; }
+  .manage-users-card { padding: 12px; }
+  .bulk-actions-bar { padding: 10px; }
 }
 
 .manage-users-table tbody td {

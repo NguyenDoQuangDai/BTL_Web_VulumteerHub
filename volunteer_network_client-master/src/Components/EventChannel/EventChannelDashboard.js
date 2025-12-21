@@ -68,6 +68,42 @@ const formatDateTime = (iso) => {
   }
 };
 
+// Local storage helpers for comments persistence
+const getSavedComments = (eventId, postId) => {
+  try {
+    const raw = localStorage.getItem(`post_comments_${eventId}_${postId}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+};
+
+const saveComments = (eventId, postId, comments) => {
+  try {
+    localStorage.setItem(`post_comments_${eventId}_${postId}`, JSON.stringify(comments));
+  } catch (e) {
+    // ignore
+  }
+};
+
+// Local storage helpers for per-post state (likes, shares)
+const getSavedPostState = (eventId, postId) => {
+  try {
+    const raw = localStorage.getItem(`post_state_${eventId}_${postId}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+};
+
+const savePostState = (eventId, postId, state) => {
+  try {
+    localStorage.setItem(`post_state_${eventId}_${postId}`, JSON.stringify(state));
+  } catch (e) {
+    // ignore
+  }
+};
+
 const ImageCarousel = ({ images }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -1283,7 +1319,30 @@ const DiscussionTab = ({ event, user }) => {
         rawPosts = response.posts;
       }
 
-      const mappedPosts = rawPosts.map(mapPost);
+      let mappedPosts = rawPosts.map(mapPost);
+
+      // Merge any locally saved comments into the loaded posts so they persist across reloads
+      mappedPosts = mappedPosts.map(p => {
+        try {
+          const saved = getSavedComments(event.id, p.id) || [];
+          const postState = getSavedPostState(event.id, p.id) || {};
+          const merged = { ...p };
+          if (saved && saved.length > 0) {
+            merged.commentsList = saved;
+            merged.commentsLoaded = true;
+            merged.showComments = true;
+          }
+          if (postState) {
+            if (typeof postState.liked !== 'undefined') merged.liked = postState.liked;
+            if (typeof postState.likes !== 'undefined') merged.likes = postState.likes;
+            if (typeof postState.shares !== 'undefined') merged.shares = postState.shares;
+          }
+          return merged;
+        } catch (e) {
+          // ignore
+        }
+        return p;
+      });
       
       // Sort: Pinned first, then newest (by ID)
       mappedPosts.sort((a, b) => {
@@ -1326,7 +1385,30 @@ const DiscussionTab = ({ event, user }) => {
         return;
       }
 
-      const mappedPosts = rawPosts.map(mapPost);
+      let mappedPosts = rawPosts.map(mapPost);
+
+      // Merge locally saved comments and post state into newly loaded posts so they display immediately
+      mappedPosts = mappedPosts.map(p => {
+        try {
+          const saved = getSavedComments(event.id, p.id) || [];
+          const postState = getSavedPostState(event.id, p.id) || {};
+          const merged = { ...p };
+          if (saved && saved.length > 0) {
+            merged.commentsList = saved;
+            merged.commentsLoaded = true;
+            merged.showComments = true;
+          }
+          if (postState) {
+            if (typeof postState.liked !== 'undefined') merged.liked = postState.liked;
+            if (typeof postState.likes !== 'undefined') merged.likes = postState.likes;
+            if (typeof postState.shares !== 'undefined') merged.shares = postState.shares;
+          }
+          return merged;
+        } catch (e) {
+          // ignore
+        }
+        return p;
+      });
       
       setPosts(prevPosts => {
         // Filter duplicates
@@ -1500,18 +1582,18 @@ const DiscussionTab = ({ event, user }) => {
       }
       return p;
     }));
-
-    try {
-        if (newLiked) {
-            await postService.likePost(postId);
-        } else {
-            await postService.unlikePost(postId);
-        }
-    } catch (error) {
-        console.error("Failed to toggle like", error);
-        // Revert on error
-        setPosts(originalPosts);
-    }
+      // Persist like state locally (no backend calls)
+      try {
+        const affected = (posts.find(p => p.id === postId)) || {};
+        const state = {
+          liked: newLiked,
+          likes: newLikes,
+          shares: affected.shares || 0
+        };
+        savePostState(event.id, postId, state);
+      } catch (e) {
+        console.error('Failed to save post like state locally', e);
+      }
   };
 
   const handleShare = (postId) => {
@@ -1519,12 +1601,21 @@ const DiscussionTab = ({ event, user }) => {
     navigator.clipboard.writeText(link).then(() => {
         alert('Đã sao chép liên kết bài viết: ' + link);
     });
-
     setPosts(posts.map(post => {
       if (post.id === postId) {
+        const newShares = (post.shares || 0) + 1;
+        // persist shares
+        try {
+          const state = getSavedPostState(event.id, postId) || {};
+          state.shares = newShares;
+          savePostState(event.id, postId, state);
+        } catch (e) {
+          console.error('Failed to save post share state locally', e);
+        }
+
         return {
           ...post,
-          shares: post.shares + 1
+          shares: newShares
         };
       }
       return post;
@@ -1546,39 +1637,21 @@ const DiscussionTab = ({ event, user }) => {
       }
 
       try {
-          const response = await postService.getComments(postId);
-          const comments = response._embedded ? response._embedded.commentDtoList : (Array.isArray(response) ? response : []);
-          
-          const mappedComments = comments.map(c => ({
-              id: c.id,
-              user: c.authorName,
-              content: c.content,
-              time: new Date(c.createdAt).toLocaleString('vi-VN'),
-              liked: false,
-              likes: 0,
-              replies: c.replies ? c.replies.map(r => ({
-                  id: r.id,
-                  user: r.authorName,
-                  content: r.content,
-                  time: new Date(r.createdAt).toLocaleString('vi-VN'),
-                  liked: false,
-                  likes: 0
-              })) : []
-          }));
-
+          // Load comments from localStorage only (do not call backend)
+          const saved = getSavedComments(event.id, postId) || [];
           setPosts(posts.map(p => {
-              if (p.id === postId) {
-                  return { 
-                      ...p, 
-                      commentsList: mappedComments, 
-                      commentsLoaded: true,
-                      showComments: true
-                  };
-              }
-              return p;
+            if (p.id === postId) {
+              return {
+                ...p,
+                commentsList: saved,
+                commentsLoaded: true,
+                showComments: true
+              };
+            }
+            return p;
           }));
       } catch (error) {
-          console.error("Failed to load comments", error);
+          console.error("Failed to load local comments", error);
       }
   };
 
@@ -1588,47 +1661,77 @@ const DiscussionTab = ({ event, user }) => {
       
       try {
           const parentId = replyingTo && replyingTo.postId === postId ? replyingTo.commentId : null;
-          const newComment = await postService.createComment(postId, commentContent, parentId);
-          
-          const mappedComment = {
-              id: newComment.id,
-              user: newComment.authorName || (user ? (user.name || user.username) : 'Tôi'),
-              content: newComment.content,
-              time: 'Vừa xong',
-              liked: false,
-              likes: 0,
-              replies: []
+
+          // Create a local comment object without calling backend
+          const generatedId = `local_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+          const authorName = user ? (user.name || user.username) : 'Tôi';
+          const newCommentObj = {
+            id: generatedId,
+            authorName,
+            content: commentContent,
+            createdAt: new Date().toISOString(),
+            replies: []
           };
 
+          const mappedComment = {
+            id: newCommentObj.id,
+            user: newCommentObj.authorName || authorName,
+            content: newCommentObj.content,
+            time: new Date(newCommentObj.createdAt).toLocaleString('vi-VN'),
+            liked: false,
+            likes: 0,
+            replies: []
+          };
+
+          // Update UI state and persist locally
           setPosts(posts.map(post => {
-              if (post.id === postId) {
-                  if (parentId) {
-                       const updatedComments = (post.commentsList || []).map(c => {
-                           if (c.id === parentId) {
-                               return { ...c, replies: [...(c.replies || []), mappedComment] };
-                           }
-                           if (c.replies && c.replies.some(r => r.id === parentId)) {
-                               return { ...c, replies: [...c.replies, mappedComment] };
-                           }
-                           return c;
-                       });
-                       return {
-                           ...post,
-                           comments: (post.comments || 0) + 1,
-                           commentsList: updatedComments
-                       };
-                  } else {
-                      return {
-                          ...post,
-                          comments: (post.comments || 0) + 1,
-                          commentsList: [...(post.commentsList || []), mappedComment],
-                          showComments: true
-                      };
-                  }
+            if (post.id === postId) {
+              if (parentId) {
+                 const updatedComments = (post.commentsList || []).map(c => {
+                   if (c.id === parentId) {
+                     return { ...c, replies: [...(c.replies || []), mappedComment] };
+                   }
+                   if (c.replies && c.replies.some(r => r.id === parentId)) {
+                     return { ...c, replies: [...c.replies, mappedComment] };
+                   }
+                   return c;
+                 });
+                 // persist reply in localStorage
+                 const saved = getSavedComments(event.id, postId) || [];
+                 const savedUpdated = saved.map(c => {
+                 if (String(c.id) === String(parentId)) {
+                   return { ...c, replies: [...(c.replies || []), mappedComment] };
+                 }
+                 if (c.replies && c.replies.some(r => String(r.id) === String(parentId))) {
+                   return { ...c, replies: [...c.replies, mappedComment] };
+                 }
+                 return c;
+                 });
+                 saveComments(event.id, postId, savedUpdated);
+
+                 return {
+                   ...post,
+                   comments: (post.comments || 0) + 1,
+                   commentsList: updatedComments
+                 };
+              } else {
+                const newList = [...(post.commentsList || []), mappedComment];
+                // persist new comment locally
+                const saved = getSavedComments(event.id, postId) || [];
+                const savedList = [...saved, mappedComment];
+                saveComments(event.id, postId, savedList);
+
+                return {
+                  ...post,
+                  comments: (post.comments || 0) + 1,
+                  commentsList: newList,
+                  showComments: true
+                };
               }
-              return post;
+            }
+            return post;
           }));
-          
+
           setReplyingTo(null);
           const input = document.getElementById(`comment-box-${postId}`);
           if (input) {
@@ -1636,48 +1739,53 @@ const DiscussionTab = ({ event, user }) => {
               input.placeholder = "Viết bình luận...";
           }
       } catch (error) {
-          console.error("Failed to post comment", error);
+          console.error("Failed to post local comment", error);
           alert("Không thể gửi bình luận");
       }
   };
 
-  const handleCommentLike = (postId, commentId, isReply = false, parentCommentId = null) => {
+    const handleCommentLike = (postId, commentId, isReply = false, parentCommentId = null) => {
       if (!ensureCanInteract('thích bình luận')) return;
-      setPosts(posts.map(post => {
-          if (post.id === postId && post.commentsList) {
-              return {
-                  ...post,
-                  commentsList: post.commentsList.map(comment => {
-                      if (!isReply && comment.id === commentId) {
-                          const newLiked = !comment.liked;
-                          return { 
-                              ...comment, 
-                              liked: newLiked,
-                              likes: newLiked ? (comment.likes || 0) + 1 : (comment.likes || 0) - 1
-                          };
-                      } else if (isReply && comment.id === parentCommentId && comment.replies) {
-                          return {
-                              ...comment,
-                              replies: comment.replies.map(reply => {
-                                  if (reply.id === commentId) {
-                                      const newLiked = !reply.liked;
-                                      return {
-                                          ...reply,
-                                          liked: newLiked,
-                                          likes: newLiked ? (reply.likes || 0) + 1 : (reply.likes || 0) - 1
-                                      };
-                                  }
-                                  return reply;
-                              })
-                          };
-                      }
-                      return comment;
+      const newPosts = posts.map(post => {
+        if (post.id === postId && post.commentsList) {
+          return {
+            ...post,
+            commentsList: post.commentsList.map(comment => {
+              if (!isReply && comment.id === commentId) {
+                const newLiked = !comment.liked;
+                return { 
+                  ...comment, 
+                  liked: newLiked,
+                  likes: newLiked ? (comment.likes || 0) + 1 : (comment.likes || 0) - 1
+                };
+              } else if (isReply && comment.id === parentCommentId && comment.replies) {
+                return {
+                  ...comment,
+                  replies: comment.replies.map(reply => {
+                    if (reply.id === commentId) {
+                      const newLiked = !reply.liked;
+                      return {
+                        ...reply,
+                        liked: newLiked,
+                        likes: newLiked ? (reply.likes || 0) + 1 : (reply.likes || 0) - 1
+                      };
+                    }
+                    return reply;
                   })
-              };
-          }
-          return post;
-      }));
-  };
+                };
+              }
+              return comment;
+            })
+          };
+        }
+        return post;
+      });
+      setPosts(newPosts);
+      const affected = newPosts.find(p => p.id === postId);
+      if (affected && affected.commentsList) {
+      saveComments(event.id, postId, affected.commentsList);
+      }
+    };
 
   const handleCommentReply = (postId, commentId, username) => {
       setReplyingTo({ postId, commentId, username });
