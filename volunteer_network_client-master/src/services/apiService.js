@@ -11,22 +11,34 @@ export const authService = {
       
       if (response && response.token) {
         localStorage.setItem('token', response.token);
-        // Construct user object if not provided directly
-        const userObj = response.user || (response.username ? { 
-          username: response.username,
-          role: response.role || (Array.isArray(response.roles) ? response.roles[0] : response.roles) || 'Tình nguyện viên',
-          id: response.id,
-          fullName: response.fullName,
-          avatar: response.avatar,
-          createdAt: response.createdAt || response.registrationDate || new Date().toISOString()
-        } : null);
+        
+        // Fetch fresh user data from /api/users/myself endpoint
+        try {
+          const userObj = await apiRequest(API_ENDPOINTS.USERS.MYSELF);
+          if (userObj) {
+            localStorage.setItem('user', JSON.stringify(userObj));
+            return { ...response, user: userObj };
+          }
+        } catch (error) {
+          console.error('Failed to fetch user data:', error);
+          // Fallback to response data if /myself fails
+          const userObj = response.user || (response.username ? { 
+            username: response.username,
+            role: response.role || (Array.isArray(response.roles) ? response.roles[0] : response.roles) || 'Tình nguyện viên',
+            id: response.id,
+            firstname: response.firstname,
+            lastname: response.lastname,
+            // avatar: response.avatar,
+            createdAt: response.createdAt || response.registrationDate || new Date().toISOString()
+          } : null);
 
-        if (userObj) {
-          localStorage.setItem('user', JSON.stringify(userObj));
-        } else {
-          localStorage.removeItem('user');
+          if (userObj) {
+            localStorage.setItem('user', JSON.stringify(userObj));
+          } else {
+            localStorage.removeItem('user');
+          }
+          return { ...response, user: userObj };
         }
-        return { ...response, user: userObj };
       }
       return response || {};
     } catch (error) {
