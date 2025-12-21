@@ -211,7 +211,34 @@ const EventCard = ({ evt }) => {
     images: evt.images || (evt.image || evt.imageUrl ? [evt.image || evt.imageUrl] : []),
   });
 
+  // Keep edit form in sync with evt (reset when evt changes)
+  useEffect(() => {
+    setEditForm({
+      name: evt.name || '',
+      description: evt.description || '',
+      location: evt.location || '',
+      dateDeadline: isoToDisplay(evt.dateDeadline || evt.dateDeadline),
+      startDate: isoToDisplay(evt.startDate || evt.startDate),
+      endDate: isoToDisplay(evt.endDate || evt.endDate),
+      images: evt.images || (evt.image || evt.imageUrl ? [evt.image || evt.imageUrl] : []),
+    });
+  }, [evt]);
+
+  const resetEditFormToEvt = () => {
+    setEditForm({
+      name: evt.name || '',
+      description: evt.description || '',
+      location: evt.location || '',
+      dateDeadline: isoToDisplay(evt.dateDeadline || evt.dateDeadline),
+      startDate: isoToDisplay(evt.startDate || evt.startDate),
+      endDate: isoToDisplay(evt.endDate || evt.endDate),
+      images: evt.images || (evt.image || evt.imageUrl ? [evt.image || evt.imageUrl] : []),
+    });
+    setEditError(null);
+  };
+
   const [creatorName, setCreatorName] = useState(null);
+  const [editError, setEditError] = useState(null);
 
   useEffect(() => {
     const fetchCreatorName = async () => {
@@ -411,11 +438,48 @@ const EventCard = ({ evt }) => {
     if (hasUnsavedChanges()) {
       setShowUnsavedConfirm(true);
     } else {
+      resetEditFormToEvt();
       setShowEditForm(false);
     }
   };
 
+  const validateEdit = () => {
+    if (!editForm.name || !editForm.dateDeadline || !editForm.startDate || !editForm.endDate) {
+      return 'Vui lòng nhập đầy đủ các trường bắt buộc.';
+    }
+
+    const dd = parseToTimestamp(editForm.dateDeadline);
+    const sd = parseToTimestamp(editForm.startDate);
+    const ed = parseToTimestamp(editForm.endDate);
+    const now = Date.now();
+
+    if (isNaN(dd) || isNaN(sd) || isNaN(ed)) {
+      return 'Định dạng ngày/giờ không hợp lệ.';
+    }
+
+    if (dd <= now) {
+      return 'Hạn đăng ký phải lớn hơn thời gian hiện tại.';
+    }
+
+    if (sd > ed) {
+      return 'Thời gian bắt đầu phải trước hoặc bằng thời gian kết thúc.';
+    }
+
+    if (dd > sd) {
+      return 'Hạn đăng ký phải trước hoặc bằng thời gian bắt đầu.';
+    }
+
+    return null;
+  };
+
   const handleSaveChanges = async () => {
+    const v = validateEdit();
+    if (v) {
+      setEditError(v);
+      return;
+    }
+    setEditError(null);
+
     try {
       await import('../../services/apiService').then(({ eventService }) =>
         eventService.updateEvent(evt.id, {
@@ -428,9 +492,9 @@ const EventCard = ({ evt }) => {
         })
       );
       setShowEditForm(false);
-      window.location.reload(); // reload để cập nhật danh sách
+      window.location.reload();
     } catch (e) {
-      alert('Không thể cập nhật sự kiện: ' + (e.message || e));
+      setEditError('Không thể cập nhật sự kiện: ' + (e.message || e));
     }
   };
 
@@ -486,6 +550,7 @@ const EventCard = ({ evt }) => {
                 className="btn btn-sm btn-outline-secondary mr-2"
                 onClick={(e) => {
                   e.stopPropagation();
+                  resetEditFormToEvt();
                   setShowEditForm(true);
                 }}
               >
@@ -601,6 +666,7 @@ const EventCard = ({ evt }) => {
             <div className="d-flex justify-content-between">
               <button className="btn btn-light" onClick={() => {
                 setShowUnsavedConfirm(false);
+                resetEditFormToEvt();
                 setShowEditForm(false);
               }}>Hủy</button>
               <button
@@ -627,6 +693,7 @@ const EventCard = ({ evt }) => {
                 <button type="button" className="btn-close" onClick={handleEditClose}></button>
               </div>
               <div className="modal-body">
+                {editError && <div className="alert alert-danger">{editError}</div>}
                 <div className="card mb-0" style={{ boxShadow: 'none', transform: 'none' }}>
                   <div className="card-body">
                     <form>
