@@ -252,6 +252,24 @@ export const userService = {
       body: JSON.stringify(userData),
     });
   },
+
+  deactivateUser: async (userId) => {
+    return await apiRequest(`/api/admin/users/${userId}/deactivate`, {
+      method: 'POST',
+    });
+  },
+  
+  activateUser: async (userId) => {
+    return await apiRequest(`/api/admin/users/${userId}/activate`, {
+      method: 'POST',
+    });
+  },
+
+  setUserRole: async (userId, role) => {
+    return await apiRequest(`/api/admin/users/${userId}/set-role/${role}`, {
+      method: 'POST',
+    });
+  },
 };
 
 // Admin Service (Requires ADMIN role)
