@@ -361,6 +361,12 @@ const EventDetails = ({ event, user, onEventUpdate }) => {
       }
   };
 
+  // Compute deadline / started flags for conditional button rendering
+  const now = new Date();
+  const isPastDeadline = event && event.dateDeadline ? new Date(event.dateDeadline) < now : false;
+  const hasStarted = event && event.startDate ? new Date(event.startDate) <= now : false;
+  const hasEnded = event && event.endDate ? new Date(event.endDate) < now : false;
+
   return (
     <div className='p-4 bg-white rounded shadow-sm position-relative'>
       <ImageCarousel images={eventImages} />
@@ -384,38 +390,57 @@ const EventDetails = ({ event, user, onEventUpdate }) => {
         {/* Action Buttons */}
         <div className="d-flex mt-3 justify-content-between align-items-center">
             <div>
-                {/* Debug: Always show what condition is being checked */}
-                {console.log('Render check - isOwner:', isOwner, 'status:', event.status)}
-                
-                {/* Show "Gửi xét duyệt" button if user is owner and event status is DRAFT */}
-                {isOwner && event.status === 'DRAFT' ? (
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-warning mr-2"
-                    onClick={handleSubmitForApproval}
-                    disabled={submitting}
-                  >
-                    {submitting ? 'Đang gửi...' : 'Gửi xét duyệt'}
-                  </button>
-                ) : !isOwner ? (
-                  <button
-                    type="button"
-                    className={`btn btn-sm mr-2 ${
-                      registrationStatus === 'REJECTED' ? 'btn-secondary' :
-                      registered ? 'btn-outline-danger' : 'btn-primary'
-                    }`}
-                    onClick={handleRegister}
-                    disabled={loadingReg || registrationStatus === 'REJECTED' || event.status === 'DRAFT'}
-                  >
-                    {loadingReg ? 'Đang xử lý...' : 
-                     registrationStatus === 'REJECTED' ? 'Đã bị từ chối' :
-                     event.status === 'DRAFT' ? 'Chưa mở đăng ký' :
-                     (registered ? 'Hủy đăng ký' : 'Đăng ký tham gia')}
-                  </button>
+                {/* Terminal states: ended/started have priority for all users */}
+                {hasEnded ? (
+                  <span className="text-muted small">Sự kiện đã kết thúc</span>
+                ) : hasStarted ? (
+                  <span className="text-muted small">Sự kiện đã bắt đầu</span>
                 ) : (
-                  <div className="text-muted small">
-                    {/* (Chủ sở hữu không thể đăng ký) */}
-                  </div>
+                  // Not started and not ended -> normal flow
+                  isOwner && event.status === 'DRAFT' ? (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-warning mr-2"
+                      onClick={handleSubmitForApproval}
+                      disabled={submitting}
+                    >
+                      {submitting ? 'Đang gửi...' : 'Gửi xét duyệt'}
+                    </button>
+                  ) : !isOwner ? (
+                    (() => {
+                      // If already registered -> allow cancel anytime before start/end
+                      if (registered) {
+                        return (
+                          <button
+                            type="button"
+                            className={`btn btn-sm mr-2 ${registrationStatus === 'REJECTED' ? 'btn-secondary' : 'btn-outline-danger'}`}
+                            onClick={handleRegister}
+                            disabled={loadingReg || registrationStatus === 'REJECTED' || event.status === 'DRAFT'}
+                          >
+                            {loadingReg ? 'Đang xử lý...' : 'Hủy đăng ký'}
+                          </button>
+                        );
+                      }
+
+                      // Not registered: if past deadline show message, else show register
+                      if (isPastDeadline) {
+                        return <span className="text-muted small">Hết hạn đăng ký</span>;
+                      }
+
+                      return (
+                        <button
+                          type="button"
+                          className={`btn btn-sm mr-2 ${registrationStatus === 'REJECTED' ? 'btn-secondary' : 'btn-primary'}`}
+                          onClick={handleRegister}
+                          disabled={loadingReg || registrationStatus === 'REJECTED' || event.status === 'DRAFT'}
+                        >
+                          {loadingReg ? 'Đang xử lý...' : registrationStatus === 'REJECTED' ? 'Đã bị từ chối' : 'Đăng ký tham gia'}
+                        </button>
+                      );
+                    })()
+                  ) : (
+                    <div className="text-muted small"></div>
+                  )
                 )}
             </div>
             <div>
