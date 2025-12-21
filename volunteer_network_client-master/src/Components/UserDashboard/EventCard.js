@@ -607,7 +607,7 @@ const EventCard = ({ evt }) => {
             </li>
             <li className="owner-line">
               <FontAwesomeIcon icon={faUser} className="mr-1 owner-icon" />
-              <strong>Tạo bởi:</strong> {creatorName || evt.username || evt.owner || evt.ownerId}
+              <strong>Tạo bởi:</strong> {evt.creatorName || creatorName || evt.username || evt.owner || evt.ownerId}
             </li>
           </ul>
 

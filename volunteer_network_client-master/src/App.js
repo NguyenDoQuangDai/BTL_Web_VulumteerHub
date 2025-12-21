@@ -40,11 +40,17 @@ function App() {
           </Route>
 
           <Route exact path='/login'>
-            <Login />
+            <>
+              <Login />
+              <Footer />
+            </>
           </Route>
 
           <PrivateRoute path='/events/:id'>
-            <TaskRegistration />
+            <>
+              <TaskRegistration />
+              <Footer />
+            </>
           </PrivateRoute>
 
           <Route exact path='/events'>
@@ -56,7 +62,10 @@ function App() {
           </Route>
 
           <Route exact path='/forum'>
-            <Forum />
+            <>
+              <Forum />
+              <Footer />
+            </>
           </Route>
 
           <Route exact path='/settings'>
@@ -64,33 +73,54 @@ function App() {
           </Route>
 
           <PrivateRoute exact path='/userDashboard'>
-            <Header />
-            <UserDashboard />
+            <>
+              <Header />
+              <UserDashboard />
+              <Footer />
+            </>
           </PrivateRoute>
 
           <Route exact path='/admin/dashboard'>
-            <AdminDashboard />
+            <>
+              <AdminDashboard />
+              <Footer />
+            </>
           </Route>
 
           <Route exact path='/admin/addEvent'>
-            <AdminEvent />
+            <>
+              <AdminEvent />
+              <Footer />
+            </>
           </Route>
 
           <Route exact path='/admin/events'>
-            <ManageEventsDashboard />
+            <>
+              <ManageEventsDashboard />
+              <Footer />
+            </>
           </Route>
 
           <Route exact path='/admin/users'>
-            <ManageUsersDashboard />
+            <>
+              <ManageUsersDashboard />
+              <Footer />
+            </>
           </Route>
 
           <Route exact path='/admin/registrations'>
-            <AdminDashboard />
+            <>
+              <AdminDashboard />
+              <Footer />
+            </>
           </Route>
 
           <Route exact path='/unauthorized'>
-            <Header />
-            <Unauthorized />
+            <>
+              <Header />
+              <Unauthorized />
+              <Footer />
+            </>
           </Route>
 
           <Route path='/search=:searchQuery'>
@@ -111,8 +141,11 @@ function App() {
           </Route>
 
           <Route path='*'>
-            <Header />
-            <NoMatch />
+            <>
+              <Header />
+              <NoMatch />
+              <Footer />
+            </>
           </Route>
         </Switch>
       </Router>

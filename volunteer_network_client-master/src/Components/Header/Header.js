@@ -1,6 +1,5 @@
 import React from 'react';
 import './Header.css';
-import logo from '../../assets/logos/logo.png';
 import { Link, useHistory } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -23,7 +22,7 @@ const Header = () => {
     <nav className='navbar navbar-expand-lg navbar-light bg-light'>
       <div className='container'>
         <Link to='/' className='navbar-brand' href='#'>
-          <img src={logo} alt='Volunteer-Network' />
+          <img src='/volumteerhub_logo_final.png' alt='VolumteerHub' />
         </Link>
         <button
           className='navbar-toggler'

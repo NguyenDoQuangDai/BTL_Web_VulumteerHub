@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useHistory, useLocation } from 'react-router-dom';
 import './Login.css';
-import logo from '../../assets/logos/logo.png';
+// logo replaced with public file at /volumteerhub_logo_final.png
 import { useAuth } from '../../contexts/AuthContext';
 import { userService } from '../../services/apiService';
 
@@ -106,7 +106,7 @@ const Login = () => {
         <div className="row mb-2">
           <Link to='/'>
             <div className="col-md-12 text-center mb-3">
-              <img className="w-25" src={logo} alt=""/>
+              <img className="w-25" src='/volumteerhub_logo_final.png' alt="VolumteerHub"/>
             </div>
           </Link>
         </div>

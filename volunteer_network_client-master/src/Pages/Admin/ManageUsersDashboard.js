@@ -3,7 +3,7 @@ import ManageUsers from '../../Components/AdminPanel/ManageUsers';
 import AdminSidebar from '../../Components/AdminPanel/AdminSidebar';
 import Unauthorized from '../../Components/Unauthorized/Unauthorized';
 import '../../Components/AdminPanel/AdminSidebar.css';
-import logo from '../../assets/logos/logo.png';
+// logo replaced with public file at /volumteerhub_logo_final.png
 import { Link } from 'react-router-dom';
 import { adminService } from '../../services/apiService';
 import { useAuth } from '../../contexts/AuthContext';
@@ -68,7 +68,7 @@ const ManageUsersDashboard = () => {
       <div className='row bg-white py-3'>
         <div className='col-md-2'>
           <Link to='/'>
-            <img className='w-75 text-center' src={logo} alt='' />
+            <img className='w-75 text-center' src='/volumteerhub_logo_final.png' alt='VolumteerHub' />
           </Link>
         </div>
         <div className='col-md-10 d-flex align-items-center'>

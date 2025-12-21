@@ -9,6 +9,7 @@ const Banner = () => {
     <section className='banner d-flex align-items-center text-center'>
       <div className='container container-search'>
       </div>
+      <div className="brand-title">VolumteerHub</div>
     </section>
   );
 };

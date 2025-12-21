@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useHistory, useParams } from 'react-router-dom';
 import '../Login/Login.css';
-import logo from '../../assets/logos/logo.png';
+// logo replaced with public file at /volumteerhub_logo_final.png
 import { useAuth } from '../../contexts/AuthContext';
 import { eventService, registrationService } from '../../services/apiService';
 
@@ -113,7 +113,7 @@ const TaskRegister = () => {
         <div className='row mb-2'>
           <Link to='/'>
             <div className='col-md-12 text-center mb-3'>
-              <img className='w-25' src={logo} alt='' />
+              <img className='w-25' src='/volumteerhub_logo_final.png' alt='VolumteerHub' />
             </div>
           </Link>
         </div>
