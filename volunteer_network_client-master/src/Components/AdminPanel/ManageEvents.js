@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
+import { useHistory } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
   faTrash, 
@@ -17,6 +18,8 @@ import { adminService, eventService } from '../../services/apiService';
 import './ManageEvents.css';
 
 const ManageEvents = () => {
+  const history = useHistory();
+  
   const statusClass = (status) => {
     switch (status) {
       case 'APPROVED':
@@ -48,7 +51,7 @@ const ManageEvents = () => {
       const mappedEvents = events.map(event => ({
         _id: event.id,
         name: event.name,
-        createdBy: event.username || 'Unknown',
+        createdBy: event.ownerName || 'Unknown',
         date: event.createdAt || event.startDate, // Use createdAt for "Ngày tạo"
         location: event.location,
         status: event.status,
@@ -172,6 +175,10 @@ const ManageEvents = () => {
     }
     loadEvents();
     setSelectedIds(new Set());
+  };
+
+  const handleRowClick = (eventId) => {
+    history.push(`/event/${eventId}`);
   };
 
   const selectionHasNonApprovable = eventList.some(
@@ -321,10 +328,18 @@ const ManageEvents = () => {
                         <label className="custom-control-label" htmlFor={`event-${evt._id}`}></label>
                       </div>
                     </td>
-                    <td>{idx + 1}</td>
-                    <td>
+                    <td 
+                      style={{ cursor: 'pointer' }} 
+                      onClick={() => handleRowClick(evt._id)}
+                    >
+                      {idx + 1}
+                    </td>
+                    <td 
+                      style={{ cursor: 'pointer' }} 
+                      onClick={() => handleRowClick(evt._id)}
+                    >
                       <div className="font-weight-bold">{evt.name}</div>
-                      <small className="text-muted">Slots: {evt.participants}/{evt.slots}</small>
+                      {/* <small className="text-muted">Slots: {evt.participants}/{evt.slots}</small> */}
                     </td>
                     <td>{evt.createdBy}</td>
                     <td>{evt.date ? new Date(evt.date).toLocaleDateString('vi-VN') : '-'}</td>
