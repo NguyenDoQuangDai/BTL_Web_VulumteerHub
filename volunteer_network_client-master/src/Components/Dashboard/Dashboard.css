@@ -1,0 +1,8 @@
+.dashboard-page {
+  min-height: 100vh;
+  background-color: #f5f7fa;
+}
+
+.dashboard-page .container {
+  padding-bottom: 40px;
+}

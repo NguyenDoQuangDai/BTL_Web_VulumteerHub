@@ -20,6 +20,7 @@ import Forum from './Components/Forum/Forum';
 import Unauthorized from './Components/Unauthorized/Unauthorized';
 import SettingsPage from './Components/Setting/settingsPage';
 import { AuthProvider } from './contexts/AuthContext';
+import Dashboard from './Components/Dashboard/Dashboard';
 
 // ========================================================================================
 
@@ -58,6 +59,8 @@ function App() {
           <Route exact path='/events'>
             <EventsPage />
           </Route>
+
+          <Route path="/dashboard" component={Dashboard} />
 
           <Route path='/event/:id'>
             <EventChannelPage />

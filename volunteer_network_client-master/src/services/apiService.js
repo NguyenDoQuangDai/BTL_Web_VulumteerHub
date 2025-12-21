@@ -548,3 +548,77 @@ function arrayBufferToBase64(buffer) {
   }
   return window.btoa(binary);
 }
+
+// Dashboard Service
+export const dashboardService = {
+  getSummary: async () => {
+    try {
+      const response = await apiRequest(API_ENDPOINTS.DASHBOARD.SUMMARY);
+      return response;
+    } catch (error) {
+      console.error('Dashboard API error, using fallback:', error);
+      // Fallback: tự tính toán từ các API có sẵn
+      return await getDashboardFallback();
+    }
+  }
+};
+
+// Fallback function khi API dashboard chưa có
+const getDashboardFallback = async () => {
+  try {
+    const eventsResponse = await apiRequest(API_ENDPOINTS.EVENTS.LIST);
+    const allEvents = eventsResponse._embedded?.events || eventsResponse.content || eventsResponse || [];
+    const approvedEvents = allEvents.filter(e => e.status === 'APPROVED');
+    
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    // Sự kiện mới công bố
+    const recentEvents = approvedEvents
+      .filter(e => new Date(e.approvedAt || e.createdAt) > sevenDaysAgo)
+      .sort((a, b) => new Date(b.approvedAt || b.createdAt) - new Date(a.approvedAt || a.createdAt))
+      .slice(0, 5);
+    
+    // Sự kiện đang hoạt động
+    const activeEvents = approvedEvents.filter(e => {
+      const startDate = new Date(e.startDate);
+      const endDate = new Date(e.endDate);
+      return startDate <= now && endDate >= now;
+    });
+    
+    // Trending events
+    const trendingEvents = [...approvedEvents]
+      .sort((a, b) => (b.registeredCount || 0) - (a.registeredCount || 0))
+      .slice(0, 5)
+      .map(e => ({
+        ...e,
+        postsCount: e.postsCount || 0,
+        likesCount: e.likesCount || 0
+      }));
+    
+    const totalRegistrations = approvedEvents.reduce(
+      (sum, e) => sum + (e.registeredCount || 0), 0
+    );
+    
+    return {
+      recentEvents,
+      eventsWithNewPosts: [],
+      trendingEvents,
+      totalEvents: allEvents.length,
+      totalUsers: 0,
+      totalRegistrations,
+      activeEventsCount: activeEvents.length
+    };
+  } catch (error) {
+    console.error('Fallback dashboard error:', error);
+    return {
+      recentEvents: [],
+      eventsWithNewPosts: [],
+      trendingEvents: [],
+      totalEvents: 0,
+      totalUsers: 0,
+      totalRegistrations: 0,
+      activeEventsCount: 0
+    };
+  }
+};

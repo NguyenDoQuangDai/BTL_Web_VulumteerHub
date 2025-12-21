@@ -66,6 +66,14 @@ export const API_ENDPOINTS = {
     CREATE: (postId) => `${API_BASE_URL}/posts/${postId}/comments`,
     REPLY: (postId, commentId) => `${API_BASE_URL}/posts/${postId}/comments/${commentId}/reply`,
     DELETE: (commentId) => `${API_BASE_URL}/comments/${commentId}`,
+  },
+
+  // Dashboard
+  DASHBOARD: {
+    SUMMARY: `${API_BASE_URL}/dashboard/summary`,
+    RECENT_APPROVED: `${API_BASE_URL}/dashboard/recent-approved`,
+    WITH_NEW_POSTS: `${API_BASE_URL}/dashboard/with-new-posts`,
+    TRENDING: `${API_BASE_URL}/dashboard/trending`,
   }
 };
 

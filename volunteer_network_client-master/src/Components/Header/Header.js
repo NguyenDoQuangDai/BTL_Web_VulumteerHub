@@ -3,16 +3,12 @@ import './Header.css';
 import { Link, useHistory } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faBell } from '@fortawesome/free-solid-svg-icons';
-import { faCog } from '@fortawesome/free-solid-svg-icons';
-//=============================================================================
+import { faBell, faCog, faChartLine } from '@fortawesome/free-solid-svg-icons';
 
 const Header = () => {
-  // Auth context
   const { user, isAuthenticated, logout } = useAuth();
   const history = useHistory();
 
-  // Handle sign out button
   const handleSignOut = () => {
     logout();
     history.push('/');
@@ -36,16 +32,31 @@ const Header = () => {
           <span className='navbar-toggler-icon'></span>
         </button>
         <div className='collapse navbar-collapse' id='navbarNavAltMarkup'>
-          <div className='navbar-nav  justify-content-between nav-link ml-auto align-items-md-center'>
-            {/* Home Navigation Click redirect to home */}
+          <div className='navbar-nav justify-content-between nav-link ml-auto align-items-md-center'>
             <Link to='/home' className='nav-link active'>
               Home
             </Link>
-            <Link to='/events' className='nav-link' href='#'>
+            
+            {/* Dashboard link - hiển thị cho người dùng đã đăng nhập */}
+            {isAuthenticated && (
+              <Link to='/dashboard' className='nav-link'>
+                <FontAwesomeIcon icon={faChartLine} className="mr-1" />
+                Dashboard
+              </Link>
+            )}
+            
+            <Link to='/events' className='nav-link'>
               Events
             </Link>
+<<<<<<< HEAD
             {/* Forum tab removed */}
             {/* If user logged in show User Dashboard */}
+=======
+            <Link to='/forum' className='nav-link'>
+              Forum
+            </Link>
+            
+>>>>>>> 0dcca80fbfe6dd1712e3480b7cddd56324e3ddff
             {isAuthenticated && (
               <Link to='/userDashboard' className='nav-link'>
                 <button type='button' className='btn btn-info w-100'>
@@ -54,7 +65,6 @@ const Header = () => {
               </Link>
             )}
 
-            {/* If user is not logged in show Login/Register else show user name and Logout  */}
             {!isAuthenticated ? (
               <Link to='/login' className='nav-link'>
                 <button type='button' className='btn btn-primary w-100'>
@@ -77,7 +87,7 @@ const Header = () => {
                 </button>
               </div>
             )}
-            {/* Redirect to Admin Dashboard */}
+            
             {user && (user.role === 'ADMIN' || user.role === 'Admin') && (
               <Link to='/admin/events' className='nav-link'>
                 <button type='button' className='btn btn-dark w-100'>
@@ -85,6 +95,7 @@ const Header = () => {
                 </button>
               </Link>
             )}
+            
             <Link to='/notifications' className='nav-link' title="Thông báo">
               <FontAwesomeIcon icon={faBell} size="lg" className="text-secondary" />
             </Link>
