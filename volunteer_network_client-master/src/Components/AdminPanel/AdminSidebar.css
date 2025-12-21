@@ -7,6 +7,12 @@
     margin-bottom: 2em;
 }
 
+.sidebar li a {
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+}
+
 .sidebar li:hover span {
     display: inline-block;
     transform: translate(5px);
@@ -14,8 +20,22 @@
 
 .sidebar svg {
     margin-right: 5px;
+    flex-shrink: 0;
 }
 
 .admin-sidebar {
     height: 100vh;
+}
+
+/* Custom width classes for better sidebar sizing */
+@media (min-width: 768px) {
+    .col-md-custom-sidebar {
+        flex: 0 0 15%;
+        max-width: 15%;
+    }
+    
+    .col-md-custom-content {
+        flex: 0 0 85%;
+        max-width: 85%;
+    }
 }
