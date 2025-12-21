@@ -49,14 +49,6 @@ const EventChannelSidebar = ({ activeTab, setActiveTab, eventStatus }) => {
                 <FontAwesomeIcon icon={faBell} /> <span>Theo dõi</span>
               </button>
             </li>
-            <li className={activeTab === 'schedule' ? 'active' : ''}>
-              <button 
-                className='sidebar-link text-dark'
-                onClick={() => setActiveTab('schedule')}
-              >
-                <FontAwesomeIcon icon={faCalendarAlt} /> <span>Lịch trình</span>
-              </button>
-            </li>
           </>
         )}
       </ul>

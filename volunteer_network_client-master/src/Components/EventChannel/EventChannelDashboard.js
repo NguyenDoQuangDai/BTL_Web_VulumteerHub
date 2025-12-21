@@ -205,6 +205,7 @@ const EventDetails = ({ event, user, onEventUpdate }) => {
       checkRegistration();
   }, [event.id, user]);
 
+  
   useEffect(() => {
       setEditForm({
         name: event.name || '',
@@ -1104,6 +1105,68 @@ const DiscussionTab = ({ event, user }) => {
 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
+  // Registration state for current user on this event (used to gate interactions)
+  const [registeredForEvent, setRegisteredForEvent] = useState(false);
+  const [registrationStatus, setRegistrationStatus] = useState(null);
+  const [checkingReg, setCheckingReg] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadRegistration = async () => {
+      setCheckingReg(true);
+      try {
+        if (!user) {
+          setRegisteredForEvent(false);
+          setRegistrationStatus(null);
+          return;
+        }
+        const regs = await registrationService.getUserRegistrations();
+        let myRegs = [];
+        if (regs && regs._embedded && regs._embedded.registrations) myRegs = regs._embedded.registrations;
+        else if (regs && regs.content) myRegs = regs.content;
+        const myReg = myRegs.find(r => r.eventId === event.id);
+        if (!cancelled) {
+          if (myReg) {
+            setRegisteredForEvent(true);
+            setRegistrationStatus(myReg.status);
+          } else {
+            setRegisteredForEvent(false);
+            setRegistrationStatus(null);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load registration for discussion tab', err);
+        if (!cancelled) {
+          setRegisteredForEvent(false);
+          setRegistrationStatus(null);
+        }
+      } finally {
+        if (!cancelled) setCheckingReg(false);
+      }
+    };
+    loadRegistration();
+    return () => { cancelled = true; };
+  }, [event.id, user]);
+
+  // Who can interact in discussion: Admins and event owner bypass registration; regular users must be registered+APPROVED
+  const isOwnerLocal = !!(user && event && (
+    (event.ownerId && user.id == event.ownerId) ||
+    (event.username && user.username === event.username) ||
+    (event.owner && user.username === event.owner)
+  ));
+  const isAdminLocal = !!(user && (user.role === 'Quản trị viên' || user.role === 'ADMIN'));
+  const canInteract = isAdminLocal || isOwnerLocal || (registeredForEvent && registrationStatus === 'APPROVED');
+
+  const ensureCanInteract = (actionName = 'thao tác này') => {
+    if (canInteract) return true;
+    if (checkingReg) {
+      alert('Đang kiểm tra quyền. Vui lòng thử lại sau.');
+      return false;
+    }
+    alert('Bạn phải đăng ký và được duyệt để ' + actionName + '.');
+    return false;
+  };
+
   const handleCreatePost = async (content, mediaUrls) => {
     try {
       const postData = {
@@ -1304,6 +1367,7 @@ const DiscussionTab = ({ event, user }) => {
   const [newPostContent, setNewPostContent] = useState('');
 
   const handlePost = async () => {
+    if (!ensureCanInteract('đăng bài')) return;
     if (!newPostContent.trim()) return;
     
     try {
@@ -1417,6 +1481,7 @@ const DiscussionTab = ({ event, user }) => {
   const sortedPosts = posts; // Already sorted
 
   const handleLike = async (postId) => {
+    if (!ensureCanInteract('thích bài viết')) return;
     const post = posts.find(p => p.id === postId);
     if (!post) return;
 
@@ -1518,6 +1583,7 @@ const DiscussionTab = ({ event, user }) => {
   };
 
   const handleComment = async (postId, commentContent) => {
+      if (!ensureCanInteract('bình luận')) return;
       if (!commentContent.trim()) return;
       
       try {
@@ -1576,6 +1642,7 @@ const DiscussionTab = ({ event, user }) => {
   };
 
   const handleCommentLike = (postId, commentId, isReply = false, parentCommentId = null) => {
+      if (!ensureCanInteract('thích bình luận')) return;
       setPosts(posts.map(post => {
           if (post.id === postId && post.commentsList) {
               return {
@@ -1633,7 +1700,7 @@ const DiscussionTab = ({ event, user }) => {
             type="text" 
             className="form-control rounded-pill bg-light border-0" 
             placeholder="Bạn đang nghĩ gì?"
-            onClick={() => setShowCreateDialog(true)}
+            onClick={() => { if (ensureCanInteract('đăng bài')) setShowCreateDialog(true); }}
             readOnly
             style={{ cursor: 'pointer' }}
           />
@@ -1641,7 +1708,7 @@ const DiscussionTab = ({ event, user }) => {
         <div className="border-top pt-2">
             <button 
               className="btn btn-light btn-sm text-secondary font-weight-bold w-100"
-              onClick={() => setShowCreateDialog(true)}
+              onClick={() => { if (ensureCanInteract('đăng bài')) setShowCreateDialog(true); }}
             >
                 <FontAwesomeIcon icon={faImage} className="text-success mr-2" />
                 Ảnh/Video
@@ -2149,10 +2216,23 @@ const EventChannelDashboard = ({ event, onClose }) => {
   
   const [activeTab, setActiveTab] = useState('details');
 
+  // Restrict access to Discussion, Members, Notifications when event is DRAFT or PENDING
+  const isRestrictedTabs = eventDetail && (eventDetail.status === 'DRAFT' || eventDetail.status === 'PENDING');
+
+  // Wrapper used by sidebar to safely change tabs
+  const handleSetActiveTab = (tab) => {
+    if (isRestrictedTabs && tab !== 'details') return; // ignore attempts to open restricted tabs
+    setActiveTab(tab);
+  };
+
   const renderContent = () => {
     if (loading) return <div>Đang tải chi tiết sự kiện...</div>;
     if (error) return <div className="text-danger">{error}</div>;
-    switch (activeTab) {
+
+    // enforce fallback to details when tabs are restricted
+    const currentTab = (isRestrictedTabs && activeTab !== 'details') ? 'details' : activeTab;
+
+    switch (currentTab) {
       case 'details':
         return (
           <div className="d-flex flex-column" style={{ minHeight: '100%' }}>
@@ -2191,13 +2271,6 @@ const EventChannelDashboard = ({ event, onClose }) => {
         return <MembersList event={eventDetail} user={user} />;
       case 'notifications':
         return <NotificationsTab event={eventDetail} user={user} />;
-      case 'schedule':
-        return (
-          <div className='p-4'>
-            <h6>Lịch trình</h6>
-            <p className='text-muted'>Lịch trình sẽ được thêm ở đây.</p>
-          </div>
-        );
       default:
         return null;
     }
@@ -2220,7 +2293,7 @@ const EventChannelDashboard = ({ event, onClose }) => {
         <div className='event-channel-sidebar'>
           <EventChannelSidebar 
             activeTab={activeTab} 
-            setActiveTab={setActiveTab} 
+            setActiveTab={handleSetActiveTab} 
             eventStatus={eventDetail.status}
           />
         </div>
