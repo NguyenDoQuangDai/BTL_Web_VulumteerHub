@@ -410,3 +410,121 @@ export const postService = {
     });
   },
 };
+
+// Push Notification Service
+export const pushNotificationService = {
+  // Check if user is already subscribed
+  checkSubscription: async () => {
+    try {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        return false;
+      }
+
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      
+      return !!subscription; // Return true if subscription exists
+    } catch (error) {
+      console.error('Error checking subscription:', error);
+      return false;
+    }
+  },
+
+  // Get current subscription
+  getSubscription: async () => {
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      return await registration.pushManager.getSubscription();
+    } catch (error) {
+      console.error('Error getting subscription:', error);
+      return null;
+    }
+  },
+
+  // Subscribe to push notifications
+  subscribe: async (subscription) => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch('/api/webpush/subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(subscription),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `HTTP error! status: ${response.status}`);
+      }
+
+      // Try to parse JSON, handle empty responses
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const text = await response.text();
+        return text ? JSON.parse(text) : { success: true };
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error subscribing to push notifications:', error);
+      throw error;
+    }
+  },
+
+  // Unsubscribe from push notifications
+  unsubscribe: async () => {
+    try {
+      const subscription = await pushNotificationService.getSubscription();
+      if (subscription) {
+        await subscription.unsubscribe();
+      }
+      return true;
+    } catch (error) {
+      console.error('Error unsubscribing:', error);
+      throw error;
+    }
+  },
+
+  // Send test notification
+  sendTest: async () => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch('/api/webpush/test', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `HTTP error! status: ${response.status}`);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const text = await response.text();
+        return text ? JSON.parse(text) : { success: true };
+      }
+      
+      return { success: true, message: 'Test notification sent' };
+    } catch (error) {
+      console.error('Error sending test notification:', error);
+      throw error;
+    }
+  },
+};
+
+// Helper function to convert ArrayBuffer to Base64
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return window.btoa(binary);
+}
